@@ -3,6 +3,7 @@ export const registerSchema = {
     type: "object",
     additionalProperties: false,
 
+
     required: ["fullName", "email", "password", "role"],
 
     properties: {
@@ -42,6 +43,7 @@ export const registerSchema = {
         maxLength: 1000,
       },
     },
+
   },
 };
 
@@ -49,6 +51,7 @@ export const loginSchema = {
   body: {
     type: "object",
     additionalProperties: false,
+
 
     required: ["email", "password"],
 
@@ -63,5 +66,29 @@ export const loginSchema = {
         minLength: 8,
       },
     },
+
+  },
+};
+
+export const changePasswordSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+
+
+    required: ["currentPassword", "newPassword"],
+
+    properties: {
+      currentPassword: {
+        type: "string",
+        minLength: 8,
+      },
+
+      newPassword: {
+        type: "string",
+        minLength: 8,
+      },
+    },
+
   },
 };

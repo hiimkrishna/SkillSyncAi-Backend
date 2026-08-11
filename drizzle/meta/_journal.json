@@ -15,6 +15,20 @@
       "when": 1786343346380,
       "tag": "0001_violet_marvex",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786442262218,
+      "tag": "0002_bright_turbo",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786482383739,
+      "tag": "0003_flat_brood",
+      "breakpoints": true
     }
   ]
 }
