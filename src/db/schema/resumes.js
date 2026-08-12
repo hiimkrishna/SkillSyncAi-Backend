@@ -2,52 +2,40 @@ import {
   pgTable,
   uuid,
   varchar,
-  text,
   integer,
+  boolean,
   timestamp,
 } from "drizzle-orm/pg-core";
 
 import { users } from "./users.js";
 
-export const jobs = pgTable("jobs", {
+export const resumes = pgTable("resumes", {
   id: uuid("id")
     .defaultRandom()
     .primaryKey(),
 
-  recruiterId: uuid("recruiter_id")
+  candidateId: uuid("candidate_id")
     .notNull()
     .references(() => users.id, {
       onDelete: "cascade",
     }),
 
-  title: varchar("title", {
+  fileName: varchar("file_name", {
     length: 255,
   }).notNull(),
 
-  company: varchar("company", {
-    length: 255,
+  fileUrl: varchar("file_url", {
+    length: 500,
   }).notNull(),
 
-  description: text("description").notNull(),
-
-  location: varchar("location", {
-    length: 255,
-  }),
-
-  type: varchar("type", {
-    length: 50,
+  fileType: varchar("file_type", {
+    length: 100,
   }).notNull(),
 
-  salaryMin: integer("salary_min"),
+  fileSize: integer("file_size"),
 
-  salaryMax: integer("salary_max"),
-
-  requirements: text("requirements"),
-
-  status: varchar("status", {
-    length: 50,
-  })
-    .default("open")
+  isActive: boolean("is_active")
+    .default(true)
     .notNull(),
 
   createdAt: timestamp("created_at", {

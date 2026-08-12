@@ -1,8 +1,10 @@
 import {
   getAllUsersController,
   getPendingRecruitersController,
+  getRecruiterController,
   approveRecruiterController,
   rejectRecruiterController,
+  updateRecruiterController,
   suspendRecruiterController,
   deleteRecruiterController,
 } from "./admin.controller.js";
@@ -33,6 +35,18 @@ export default async function adminRoutes(app) {
   );
 
   // ============================================
+  // GET RECRUITER BY ID
+  // ============================================
+
+  app.get(
+    "/recruiters/:id",
+    {
+      preHandler: [app.authenticate, app.authorize(["admin"])],
+    },
+    getRecruiterController,
+  );
+
+  // ============================================
   // APPROVE RECRUITER
   // ============================================
 
@@ -54,6 +68,18 @@ export default async function adminRoutes(app) {
       preHandler: [app.authenticate, app.authorize(["admin"])],
     },
     rejectRecruiterController,
+  );
+
+  // ============================================
+  // UPDATE RECRUITER
+  // ============================================
+
+  app.patch(
+    "/recruiters/:id",
+    {
+      preHandler: [app.authenticate, app.authorize(["admin"])],
+    },
+    updateRecruiterController,
   );
 
   // ============================================

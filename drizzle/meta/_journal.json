@@ -29,6 +29,34 @@
       "when": 1786482383739,
       "tag": "0003_flat_brood",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786506367186,
+      "tag": "0004_married_lockjaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786509212475,
+      "tag": "0005_clean_micromacro",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786510346138,
+      "tag": "0006_equal_baron_strucker",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786534597535,
+      "tag": "0007_small_monster_badoon",
+      "breakpoints": true
     }
   ]
 }
