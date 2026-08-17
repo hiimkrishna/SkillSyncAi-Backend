@@ -1,30 +1,40 @@
 import {
   getMyResumesController,
   createResumeController,
+  getResumeController,
+  deleteResumeController,
 } from "./resume.controller.js";
 
 export default async function resumeRoutes(fastify) {
-  // ============================================
-  // GET MY RESUMES
-  // ============================================
+  fastify.get(
+    "/",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    getMyResumesController
+  );
 
-  fastify.get("/my", {
-    preHandler: [
-      fastify.authenticate,
-      fastify.authorize(["candidate"]),
-    ],
-    handler: getMyResumesController,
-  });
+  fastify.post(
+    "/",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    createResumeController
+  );
 
-  // ============================================
-  // CREATE RESUME
-  // ============================================
+  fastify.get(
+    "/:id",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    getResumeController
+  );
 
-  fastify.post("/", {
-    preHandler: [
-      fastify.authenticate,
-      fastify.authorize(["candidate"]),
-    ],
-    handler: createResumeController,
-  });
+  fastify.delete(
+    "/:id",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    deleteResumeController
+  );
 }

@@ -1,8 +1,15 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Plugins
 import authPlugin from "./plugins/auth.js";
 
+// Routes
 import authRoutes from "./modules/auth/auth.routes.js";
 import settingsRoutes from "./modules/settings/settings.routes.js";
 import candidateRoutes from "./modules/candidates/candidate.routes.js";
@@ -11,13 +18,52 @@ import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import applicationRoutes from "./modules/applications/application.routes.js";
 import resumeRoutes from "./modules/resumes/resume.routes.js";
 
+// ============================================
+// PATH CONFIGURATION
+// ============================================
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ============================================
+// FASTIFY APP
+// ============================================
+
 const app = Fastify({
   logger: true,
 });
 
-// Allow frontend to communicate with backend
+// ============================================
+// STATIC FILES
+// ============================================
+//
+// Project structure:
+//
+// SkillSyncAi-Backend/
+// ├── uploads/
+// │   └── resumes/
+// └── src/
+//     └── app.js
+//
+// Public URL:
+// /uploads/resumes/example.pdf
+//
+// Physical file:
+// uploads/resumes/example.pdf
+//
+
+await app.register(fastifyStatic, {
+  root: path.join(__dirname, "../uploads"),
+  prefix: "/uploads/",
+});
+
+// ============================================
+// CORS
+// ============================================
+
 await app.register(cors, {
   origin: true,
+
   methods: [
     "GET",
     "POST",
@@ -26,53 +72,99 @@ await app.register(cors, {
     "DELETE",
     "OPTIONS",
   ],
+
   allowedHeaders: [
     "Content-Type",
     "Authorization",
   ],
 });
 
-// Authentication / Authorization
+// ============================================
+// MULTIPART / FILE UPLOADS
+// ============================================
+
+await app.register(multipart, {
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB
+    files: 1,
+  },
+});
+
+// ============================================
+// AUTHENTICATION / AUTHORIZATION
+// ============================================
+
 await app.register(authPlugin);
 
-// Auth
+// ============================================
+// AUTH ROUTES
+// ============================================
+
 await app.register(authRoutes, {
   prefix: "/api/auth",
 });
 
-//Resumes
+// ============================================
+// RESUME ROUTES
+// ============================================
+
 await app.register(resumeRoutes, {
   prefix: "/api/resumes",
 });
 
-// Settings
+// ============================================
+// SETTINGS ROUTES
+// ============================================
+
 await app.register(settingsRoutes, {
   prefix: "/api/settings",
 });
 
-// Candidate
+// ============================================
+// CANDIDATE ROUTES
+// ============================================
+
 await app.register(candidateRoutes, {
   prefix: "/api/candidates",
 });
-// Candidate Dashboard
+
+// ============================================
+// DASHBOARD ROUTES
+// ============================================
+
 await app.register(dashboardRoutes, {
   prefix: "/api/dashboard",
 });
-//Applications
+
+// ============================================
+// APPLICATION ROUTES
+// ============================================
+
 await app.register(applicationRoutes, {
   prefix: "/api/applications",
 });
 
-// Jobs
+// ============================================
+// JOB ROUTES
+// ============================================
+
 await app.register(jobRoutes, {
   prefix: "/api/jobs",
 });
 
-// Health check
+// ============================================
+// HEALTH CHECK
+// ============================================
+
 app.get("/", async () => {
   return {
+    success: true,
     message: "SkillSync API running",
   };
 });
+
+// ============================================
+// EXPORT
+// ============================================
 
 export default app;

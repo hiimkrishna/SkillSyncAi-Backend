@@ -57,6 +57,27 @@
       "when": 1786534597535,
       "tag": "0007_small_monster_badoon",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786943102281,
+      "tag": "0008_glossy_human_cannonball",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786958904460,
+      "tag": "0009_strange_blazing_skull",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786963343861,
+      "tag": "0010_gigantic_frightful_four",
+      "breakpoints": true
     }
   ]
 }

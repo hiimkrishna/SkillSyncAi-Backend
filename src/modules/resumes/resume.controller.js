@@ -1,6 +1,8 @@
 import {
   getMyResumes,
   createResume,
+  getResumeById,
+  deleteResume,
 } from "./resume.service.js";
 
 // ============================================
@@ -9,7 +11,9 @@ import {
 
 export const getMyResumesController = async (request, reply) => {
   try {
-    const resumes = await getMyResumes(request.user.userId);
+    const userId = request.user.userId;
+
+    const resumes = await getMyResumes(userId);
 
     return reply.code(200).send({
       success: true,
@@ -18,62 +22,116 @@ export const getMyResumesController = async (request, reply) => {
   } catch (error) {
     request.log.error(error);
 
-    if (error.message === "Candidate not found") {
-      return reply.code(404).send({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    if (error.message === "User is not a candidate") {
-      return reply.code(403).send({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    return reply.code(500).send({
+    return reply.code(error.statusCode || 500).send({
       success: false,
-      message: "Internal server error",
+      message: error.message || "Failed to fetch resumes",
     });
   }
 };
 
 // ============================================
-// CREATE RESUME
+// CREATE / UPLOAD RESUME
 // ============================================
 
 export const createResumeController = async (request, reply) => {
   try {
-    const resume = await createResume(
-      request.user.userId,
-      request.body,
-    );
+    const userId = request.user.userId;
+
+    const file = await request.file();
+
+    if (!file) {
+      return reply.code(400).send({
+        success: false,
+        message: "Resume file is required",
+      });
+    }
+
+    const result = await createResume({
+      userId,
+      file,
+    });
 
     return reply.code(201).send({
+      success: true,
+      message: "Resume uploaded and processed successfully",
+      data: result,
+    });
+  } catch (error) {
+    request.log.error(error);
+
+    return reply.code(error.statusCode || 500).send({
+      success: false,
+      message: error.message || "Failed to process resume",
+    });
+  }
+};
+
+// ============================================
+// GET SINGLE RESUME
+// ============================================
+
+export const getResumeController = async (request, reply) => {
+  try {
+    const userId = request.user.userId;
+    const { id } = request.params;
+
+    const resume = await getResumeById({
+      userId,
+      resumeId: id,
+    });
+
+    if (!resume) {
+      return reply.code(404).send({
+        success: false,
+        message: "Resume not found",
+      });
+    }
+
+    return reply.code(200).send({
       success: true,
       data: resume,
     });
   } catch (error) {
     request.log.error(error);
 
-    if (error.message === "Candidate not found") {
+    return reply.code(error.statusCode || 500).send({
+      success: false,
+      message: error.message || "Failed to fetch resume",
+    });
+  }
+};
+
+// ============================================
+// DELETE RESUME
+// ============================================
+
+export const deleteResumeController = async (request, reply) => {
+  try {
+    const userId = request.user.userId;
+    const { id } = request.params;
+
+    const deleted = await deleteResume({
+      userId,
+      resumeId: id,
+    });
+
+    if (!deleted) {
       return reply.code(404).send({
         success: false,
-        message: error.message,
+        message: "Resume not found",
       });
     }
 
-    if (error.message === "User is not a candidate") {
-      return reply.code(403).send({
-        success: false,
-        message: error.message,
-      });
-    }
+    return reply.code(200).send({
+      success: true,
+      message: "Resume deleted successfully",
+    });
+  } catch (error) {
+    request.log.error(error);
 
-    return reply.code(500).send({
+    return reply.code(error.statusCode || 500).send({
       success: false,
-      message: "Internal server error",
+      message: error.message || "Failed to delete resume",
     });
   }
 };
