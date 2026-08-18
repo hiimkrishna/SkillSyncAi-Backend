@@ -4,8 +4,19 @@ import { db } from "../../db/index.js";
 import { candidateProfiles } from "../../db/schema/candidate-profiles.js";
 import { users } from "../../db/schema/users.js";
 
+import {
+  calculateProfileCompletion,
+} from "../../utils/profile-completion.js";
+
+// ============================================
+// GET CANDIDATE PROFILE
+// ============================================
+
 export const getCandidateProfile = async (userId) => {
-  // Get the user first
+  // ============================================
+  // GET USER
+  // ============================================
+
   const [user] = await db
     .select({
       id: users.id,
@@ -21,28 +32,39 @@ export const getCandidateProfile = async (userId) => {
     throw new Error("User not found");
   }
 
-  // Make sure this endpoint is only used by candidates
+  // ============================================
+  // ROLE CHECK
+  // ============================================
+
   if (user.role !== "candidate") {
     throw new Error("User is not a candidate");
   }
 
-  // Find candidate profile
+  // ============================================
+  // FIND PROFILE
+  // ============================================
+
   const [profile] = await db
     .select()
     .from(candidateProfiles)
     .where(eq(candidateProfiles.userId, userId))
     .limit(1);
 
-  // If profile does not exist, create an empty profile
+  // ============================================
+  // CREATE EMPTY PROFILE IF NEEDED
+  // ============================================
+
   if (!profile) {
     const [createdProfile] = await db
       .insert(candidateProfiles)
       .values({
         userId,
+
         phone: null,
         location: null,
         headline: null,
         bio: null,
+
         skills: [],
         education: [],
         experience: [],
@@ -51,6 +73,15 @@ export const getCandidateProfile = async (userId) => {
         socialLinks: {},
       })
       .returning();
+
+    // ============================================
+    // SINGLE PROFILE COMPLETION CALCULATION
+    // ============================================
+
+    const completion =
+      calculateProfileCompletion(
+        createdProfile
+      );
 
     return {
       id: createdProfile.id,
@@ -68,14 +99,33 @@ export const getCandidateProfile = async (userId) => {
       skills: createdProfile.skills,
       education: createdProfile.education,
       experience: createdProfile.experience,
-      certifications: createdProfile.certifications,
+      certifications:
+        createdProfile.certifications,
       portfolio: createdProfile.portfolio,
-      socialLinks: createdProfile.socialLinks,
+      socialLinks:
+        createdProfile.socialLinks,
 
-      createdAt: createdProfile.createdAt,
-      updatedAt: createdProfile.updatedAt,
+      // ========================================
+      // PROFILE COMPLETION
+      // ========================================
+
+      profileCompletion:
+        completion,
+
+      createdAt:
+        createdProfile.createdAt,
+
+      updatedAt:
+        createdProfile.updatedAt,
     };
   }
+
+  // ============================================
+  // EXISTING PROFILE
+  // ============================================
+
+  const completion =
+    calculateProfileCompletion(profile);
 
   return {
     id: profile.id,
@@ -93,61 +143,132 @@ export const getCandidateProfile = async (userId) => {
     skills: profile.skills,
     education: profile.education,
     experience: profile.experience,
-    certifications: profile.certifications,
+    certifications:
+      profile.certifications,
     portfolio: profile.portfolio,
-    socialLinks: profile.socialLinks,
+    socialLinks:
+      profile.socialLinks,
 
-    createdAt: profile.createdAt,
-    updatedAt: profile.updatedAt,
+    // ==========================================
+    // PROFILE COMPLETION
+    // ==========================================
+
+    profileCompletion:
+      completion,
+
+    createdAt:
+      profile.createdAt,
+
+    updatedAt:
+      profile.updatedAt,
   };
 };
 
-export const createCandidateProfile = async (userId, data = {}) => {
+// ============================================
+// CREATE CANDIDATE PROFILE
+// ============================================
+
+export const createCandidateProfile = async (
+  userId,
+  data = {}
+) => {
   const existing = await db
     .select()
     .from(candidateProfiles)
-    .where(eq(candidateProfiles.userId, userId))
+    .where(
+      eq(
+        candidateProfiles.userId,
+        userId
+      )
+    )
     .limit(1);
 
   if (existing[0]) {
-    throw new Error("Candidate profile already exists");
+    throw new Error(
+      "Candidate profile already exists"
+    );
   }
 
   const [profile] = await db
     .insert(candidateProfiles)
     .values({
       userId,
+
       phone: data.phone ?? null,
       location: data.location ?? null,
       headline: data.headline ?? null,
       bio: data.bio ?? null,
+
       skills: data.skills ?? [],
       education: data.education ?? [],
       experience: data.experience ?? [],
-      certifications: data.certifications ?? [],
+      certifications:
+        data.certifications ?? [],
       portfolio: data.portfolio ?? [],
-      socialLinks: data.socialLinks ?? {},
+      socialLinks:
+        data.socialLinks ?? {},
     })
     .returning();
 
-  return profile;
+  // ============================================
+  // PROFILE COMPLETION
+  // ============================================
+
+  const completion =
+    calculateProfileCompletion(profile);
+
+  return {
+    ...profile,
+
+    profileCompletion:
+      completion,
+  };
 };
 
-export const updateCandidateProfile = async (userId, data) => {
+// ============================================
+// UPDATE CANDIDATE PROFILE
+// ============================================
+
+export const updateCandidateProfile = async (
+  userId,
+  data
+) => {
   const [profile] = await db
     .update(candidateProfiles)
     .set({
       ...data,
       updatedAt: new Date(),
     })
-    .where(eq(candidateProfiles.userId, userId))
+    .where(
+      eq(
+        candidateProfiles.userId,
+        userId
+      )
+    )
     .returning();
 
+  // ============================================
+  // PROFILE DOES NOT EXIST
+  // ============================================
+
   if (!profile) {
-    // Profile somehow doesn't exist.
-    // Create it instead of returning "not found".
-    return createCandidateProfile(userId, data);
+    return createCandidateProfile(
+      userId,
+      data
+    );
   }
 
-  return getCandidateProfile(userId);
+  // ============================================
+  // RECALCULATE USING SAME UTILITY
+  // ============================================
+
+  const completion =
+    calculateProfileCompletion(profile);
+
+  return {
+    ...profile,
+
+    profileCompletion:
+      completion,
+  };
 };

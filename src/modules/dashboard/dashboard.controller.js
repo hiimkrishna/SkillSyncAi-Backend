@@ -1,10 +1,21 @@
-import { getDashboardData } from "./dashboard.service.js";
+import {
+  getDashboardData,
+} from "./dashboard.service.js";
 
-export const getDashboard = async (request, reply) => {
+// ============================================
+// GET CANDIDATE DASHBOARD
+// ============================================
+
+export const getDashboard = async (
+  request,
+  reply
+) => {
   try {
-    const data = await getDashboardData(
-      request.user.userId
-    );
+    const userId =
+      request.user.userId;
+
+    const data =
+      await getDashboardData(userId);
 
     return reply.code(200).send({
       success: true,
@@ -13,23 +24,13 @@ export const getDashboard = async (request, reply) => {
   } catch (error) {
     request.log.error(error);
 
-    if (error.message === "User not found") {
-      return reply.code(404).send({
+    return reply
+      .code(error.statusCode || 500)
+      .send({
         success: false,
-        message: "User not found",
+        message:
+          error.message ||
+          "Failed to load dashboard",
       });
-    }
-
-    if (error.message === "Candidate access required") {
-      return reply.code(403).send({
-        success: false,
-        message: "Candidate access required",
-      });
-    }
-
-    return reply.code(500).send({
-      success: false,
-      message: "Failed to load dashboard",
-    });
   }
 };

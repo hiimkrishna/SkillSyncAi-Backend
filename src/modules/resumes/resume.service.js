@@ -34,6 +34,8 @@ const UPLOAD_DIR = path.join(
 // ============================================
 
 const resolveCandidateProfileId = async (userId) => {
+  console.log("[SERVICE] Resolving candidate profile...");
+
   const candidateId =
     await getCandidateProfileIdByUserId(userId);
 
@@ -46,6 +48,11 @@ const resolveCandidateProfileId = async (userId) => {
 
     throw error;
   }
+
+  console.log(
+    "[SERVICE] Candidate profile found:",
+    candidateId
+  );
 
   return candidateId;
 };
@@ -69,75 +76,189 @@ export const createResume = async ({
   userId,
   file,
 }) => {
-  validateResumeFile(file);
+  console.log("\n========================================");
+  console.log("CREATE RESUME STARTED");
+  console.log("========================================");
 
-  const candidateId =
-    await resolveCandidateProfileId(userId);
+  // Keep the uploaded file path outside the try block
+  // so it can safely be cleaned up if anything fails.
+  let absolutePath = null;
 
-  const extension =
-    getFileExtension(file.filename);
+  try {
+    // ========================================
+    // VALIDATE FILE
+    // ========================================
 
-  const buffer = await file.toBuffer();
+    console.log("[1] Validating uploaded file...");
 
-  if (!buffer || buffer.length === 0) {
-    const error = new Error(
-      "Uploaded resume is empty"
+    validateResumeFile(file);
+
+    console.log("[2] File validation passed");
+
+    console.log("Filename:", file.filename);
+    console.log("Mimetype:", file.mimetype);
+
+    // ========================================
+    // RESOLVE CANDIDATE
+    // ========================================
+
+    console.log("[3] Resolving candidate...");
+
+    const candidateId =
+      await resolveCandidateProfileId(userId);
+
+    console.log(
+      "[4] Candidate resolved:",
+      candidateId
     );
 
-    error.statusCode = 400;
+    // ========================================
+    // FILE EXTENSION
+    // ========================================
 
-    throw error;
-  }
+    const extension =
+      getFileExtension(file.filename);
 
-  validateFileSize(buffer.length);
+    console.log(
+      "[5] File extension:",
+      extension
+    );
 
-  await fs.mkdir(UPLOAD_DIR, {
-    recursive: true,
-  });
+    // ========================================
+    // BUFFER
+    // ========================================
 
-  const uniqueName =
-    `${crypto.randomUUID()}${extension}`;
+    console.log(
+      "[6] Reading uploaded file into buffer..."
+    );
 
-  const absolutePath =
-    path.join(
+    const buffer =
+      await file.toBuffer();
+
+    console.log(
+      "[7] Buffer received"
+    );
+
+    console.log(
+      "Buffer size:",
+      buffer?.length,
+      "bytes"
+    );
+
+    if (
+      !buffer ||
+      buffer.length === 0
+    ) {
+      const error = new Error(
+        "Uploaded resume is empty"
+      );
+
+      error.statusCode = 400;
+
+      throw error;
+    }
+
+    // ========================================
+    // FILE SIZE VALIDATION
+    // ========================================
+
+    validateFileSize(buffer.length);
+
+    console.log(
+      "[8] File size validation passed"
+    );
+
+    // ========================================
+    // CREATE UPLOAD DIRECTORY
+    // ========================================
+
+    await fs.mkdir(
       UPLOAD_DIR,
+      {
+        recursive: true,
+      }
+    );
+
+    console.log(
+      "[9] Upload directory ready"
+    );
+
+    // ========================================
+    // CREATE UNIQUE FILE NAME
+    // ========================================
+
+    const uniqueName =
+      `${crypto.randomUUID()}${extension}`;
+
+    absolutePath =
+      path.join(
+        UPLOAD_DIR,
+        uniqueName
+      );
+
+    const publicUrl =
+      `/uploads/resumes/${uniqueName}`;
+
+    console.log(
+      "[10] Generated unique filename:",
       uniqueName
     );
 
-  const publicUrl =
-    `/uploads/resumes/${uniqueName}`;
+    // ========================================
+    // SAVE FILE
+    // ========================================
 
-  await fs.writeFile(
-    absolutePath,
-    buffer
-  );
+    await fs.writeFile(
+      absolutePath,
+      buffer
+    );
 
-  try {
+    console.log(
+      "[11] File successfully saved:",
+      absolutePath
+    );
+
     // ========================================
     // TEXT EXTRACTION
     // ========================================
 
     let rawText = "";
 
+    // ========================================
+    // PDF
+    // ========================================
+
     if (extension === ".pdf") {
-      console.log(
-        "========================================"
-      );
-
-      console.log(
-        "PDF resume detected"
-      );
+      console.log("\n========================================");
+      console.log("[12] PDF DETECTED");
+      console.log("========================================");
 
       // --------------------------------------
-      // NORMAL PDF TEXT
+      // NORMAL PDF EXTRACTION
       // --------------------------------------
+
+      console.log(
+        "[13] Starting normal PDF text extraction..."
+      );
+
+      const extractionStart =
+        Date.now();
 
       rawText =
         await extractPdfText(buffer);
 
       console.log(
-        "Normal PDF text length:",
-        rawText.length
+        "[14] Normal PDF extraction completed"
+      );
+
+      console.log(
+        "Extraction time:",
+        `${Date.now() - extractionStart} ms`
+      );
+
+      console.log(
+        "Extracted text length:",
+        rawText?.length
       );
 
       // --------------------------------------
@@ -149,17 +270,42 @@ export const createResume = async ({
         rawText.trim().length < 30
       ) {
         console.log(
-          "PDF text insufficient."
+          "\n========================================"
+        );
+
+        console.log(
+          "[15] NORMAL PDF TEXT INSUFFICIENT"
         );
 
         console.log(
           "Starting PaddleOCR fallback..."
         );
 
+        console.log(
+          "========================================"
+        );
+
+        const ocrStart =
+          Date.now();
+
         rawText =
           await extractPdfTextWithOCR(
             buffer
           );
+
+        console.log(
+          "[16] OCR completed"
+        );
+
+        console.log(
+          "OCR time:",
+          `${Date.now() - ocrStart} ms`
+        );
+
+        console.log(
+          "OCR text length:",
+          rawText?.length
+        );
       }
     }
 
@@ -167,14 +313,77 @@ export const createResume = async ({
     // DOCX
     // ========================================
 
-    else if (extension === ".docx") {
+    else if (
+      extension === ".docx"
+    ) {
+      console.log(
+        "\n========================================"
+      );
+
+      console.log(
+        "[12] DOCX DETECTED"
+      );
+
+      console.log(
+        "========================================"
+      );
+
+      console.log(
+        "[13] Starting DOCX text extraction..."
+      );
+
+      const extractionStart =
+        Date.now();
+
       rawText =
-        await extractDocxText(buffer);
+        await extractDocxText(
+          buffer
+        );
+
+      console.log(
+        "[14] DOCX extraction completed"
+      );
+
+      console.log(
+        "Extraction time:",
+        `${Date.now() - extractionStart} ms`
+      );
+
+      console.log(
+        "Extracted text length:",
+        rawText?.length
+      );
     }
 
     // ========================================
-    // VALIDATE TEXT
+    // UNSUPPORTED FILE
     // ========================================
+
+    else {
+      const error = new Error(
+        `Unsupported resume file type: ${extension}`
+      );
+
+      error.statusCode = 400;
+
+      throw error;
+    }
+
+    // ========================================
+    // VALIDATE EXTRACTED TEXT
+    // ========================================
+
+    console.log(
+      "\n========================================"
+    );
+
+    console.log(
+      "[17] VALIDATING EXTRACTED TEXT"
+    );
+
+    console.log(
+      "========================================"
+    );
 
     if (
       !rawText ||
@@ -190,27 +399,117 @@ export const createResume = async ({
     }
 
     console.log(
+      "[18] Text validation passed"
+    );
+
+    console.log(
       "Final extracted text length:",
       rawText.length
     );
 
+    console.log(
+      "\nFirst 300 characters:"
+    );
+
+    console.log(
+      rawText.substring(0, 300)
+    );
+
     // ========================================
-    // PARSE
+    // AI PARSING
     // ========================================
 
+    console.log(
+      "\n========================================"
+    );
+
+    console.log(
+      "[19] STARTING RESUME AI PARSING"
+    );
+
+    console.log(
+      "========================================"
+    );
+
+    const aiStart =
+      Date.now();
+
     const parsedResume =
-      await parseResume(rawText);
+      await parseResume(
+        rawText
+      );
+
+    console.log(
+      "[20] AI PARSING COMPLETED"
+    );
+
+    console.log(
+      "AI parsing time:",
+      `${Date.now() - aiStart} ms`
+    );
+
+    // ----------------------------------------
+    // DEBUG ONLY
+    // ----------------------------------------
+    //
+    // This JSON is only printed in the backend
+    // terminal for development/debugging.
+    //
+    // It is NOT sent to the frontend.
+    //
+
+    console.log(
+      "Parsed resume:"
+    );
+
+    console.log(
+      JSON.stringify(
+        parsedResume,
+        null,
+        2
+      )
+    );
 
     // ========================================
     // NORMALIZE
     // ========================================
 
+    console.log(
+      "\n========================================"
+    );
+
+    console.log(
+      "[21] NORMALIZING RESUME"
+    );
+
+    console.log(
+      "========================================"
+    );
+
     const normalizedResume =
-      normalizeResume(parsedResume);
+      normalizeResume(
+        parsedResume
+      );
+
+    console.log(
+      "[22] NORMALIZATION COMPLETED"
+    );
 
     // ========================================
-    // STORE
+    // DATABASE INSERT
     // ========================================
+
+    console.log(
+      "\n========================================"
+    );
+
+    console.log(
+      "[23] INSERTING RESUME INTO DATABASE"
+    );
+
+    console.log(
+      "========================================"
+    );
 
     const resume =
       await insertResume({
@@ -243,14 +542,87 @@ export const createResume = async ({
           null,
       });
 
+    console.log(
+      "[24] DATABASE INSERT COMPLETED"
+    );
+
+    console.log(
+      "Resume ID:",
+      resume?.id
+    );
+
+    // ========================================
+    // SUCCESS
+    // ========================================
+
+    console.log(
+      "\n========================================"
+    );
+
+    console.log(
+      "CREATE RESUME SUCCESS"
+    );
+
+    console.log(
+      "========================================\n"
+    );
+
     return resume;
+
   } catch (error) {
-    try {
-      await fs.unlink(
-        absolutePath
-      );
-    } catch {
-      // ignore cleanup failure
+
+    // ========================================
+    // ERROR
+    // ========================================
+
+    console.error(
+      "\n========================================"
+    );
+
+    console.error(
+      "CREATE RESUME FAILED"
+    );
+
+    console.error(
+      "========================================"
+    );
+
+    console.error(
+      "Error message:",
+      error.message
+    );
+
+    console.error(
+      "Error stack:",
+      error.stack
+    );
+
+    // ========================================
+    // CLEANUP UPLOADED FILE
+    // ========================================
+
+    if (absolutePath) {
+      try {
+        await fs.unlink(
+          absolutePath
+        );
+
+        console.log(
+          "Uploaded file cleaned up"
+        );
+      } catch (cleanupError) {
+        // Ignore "file not found" because
+        // the file may not have been created
+        // successfully.
+        if (
+          cleanupError.code !== "ENOENT"
+        ) {
+          console.error(
+            "Cleanup failed:",
+            cleanupError.message
+          );
+        }
+      }
     }
 
     throw error;
@@ -258,7 +630,7 @@ export const createResume = async ({
 };
 
 // ============================================
-// GET ONE
+// GET ONE RESUME
 // ============================================
 
 export const getResumeById = async ({
@@ -266,7 +638,9 @@ export const getResumeById = async ({
   resumeId,
 }) => {
   const candidateId =
-    await resolveCandidateProfileId(userId);
+    await resolveCandidateProfileId(
+      userId
+    );
 
   return getResumeByIdAndCandidateId({
     resumeId,
@@ -275,7 +649,7 @@ export const getResumeById = async ({
 };
 
 // ============================================
-// DELETE
+// DELETE RESUME
 // ============================================
 
 export const deleteResume = async ({
@@ -283,7 +657,9 @@ export const deleteResume = async ({
   resumeId,
 }) => {
   const candidateId =
-    await resolveCandidateProfileId(userId);
+    await resolveCandidateProfileId(
+      userId
+    );
 
   const resume =
     await getResumeByIdAndCandidateId({
@@ -312,7 +688,7 @@ export const deleteResume = async ({
         filePath
       );
     } catch {
-      // file already deleted
+      // File already deleted.
     }
   }
 

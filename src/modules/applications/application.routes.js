@@ -1,5 +1,3 @@
-// src/modules/applications/application.routes.js
-
 import {
   applyToJobController,
   getMyApplicationsController,
@@ -10,44 +8,67 @@ import {
 
 export default async function applicationRoutes(fastify) {
   // ============================================
-  // CANDIDATE APPLICATIONS
+  // APPLY TO JOB
+  // POST /api/applications
   // ============================================
 
-  // Candidate applies to a job
-  fastify.post("/", {
-    preHandler: [fastify.authenticate],
-    handler: applyToJobController,
-  });
+  fastify.post(
+    "/",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    applyToJobController
+  );
 
-  // Candidate gets their own applications
-  fastify.get("/my", {
-    preHandler: [fastify.authenticate],
-    handler: getMyApplicationsController,
-  });
+  // ============================================
+  // CANDIDATE APPLICATIONS
+  // GET /api/applications/my
+  // ============================================
+
+  fastify.get(
+    "/my",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    getMyApplicationsController
+  );
 
   // ============================================
   // RECRUITER APPLICATIONS
+  // GET /api/applications/recruiter
   // ============================================
 
-  // Recruiter gets applications for their jobs
-  fastify.get("/recruiter", {
-    preHandler: [fastify.authenticate],
-    handler: getRecruiterApplicationsController,
-  });
+  fastify.get(
+    "/recruiter",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    getRecruiterApplicationsController
+  );
 
   // ============================================
   // SINGLE APPLICATION
+  // GET /api/applications/:id
   // ============================================
 
-  // Get one application
-  fastify.get("/:id", {
-    preHandler: [fastify.authenticate],
-    handler: getApplicationController,
-  });
+  fastify.get(
+    "/:id",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    getApplicationController
+  );
 
-  // Update application status
-  fastify.patch("/:id", {
-    preHandler: [fastify.authenticate],
-    handler: updateApplicationStatusController,
-  });
+  // ============================================
+  // UPDATE APPLICATION STATUS
+  // PATCH /api/applications/:id/status
+  // ============================================
+
+  fastify.patch(
+    "/:id/status",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    updateApplicationStatusController
+  );
 }

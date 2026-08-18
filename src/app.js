@@ -6,10 +6,16 @@ import fastifyStatic from "@fastify/static";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Plugins
+// ============================================
+// PLUGINS
+// ============================================
+
 import authPlugin from "./plugins/auth.js";
 
-// Routes
+// ============================================
+// ROUTES
+// ============================================
+
 import authRoutes from "./modules/auth/auth.routes.js";
 import settingsRoutes from "./modules/settings/settings.routes.js";
 import candidateRoutes from "./modules/candidates/candidate.routes.js";
@@ -17,6 +23,7 @@ import jobRoutes from "./modules/jobs/job.routes.js";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import applicationRoutes from "./modules/applications/application.routes.js";
 import resumeRoutes from "./modules/resumes/resume.routes.js";
+import savedJobsRoutes from "./modules/saved-jobs/saved-jobs.routes.js";
 
 // ============================================
 // PATH CONFIGURATION
@@ -36,21 +43,6 @@ const app = Fastify({
 // ============================================
 // STATIC FILES
 // ============================================
-//
-// Project structure:
-//
-// SkillSyncAi-Backend/
-// ├── uploads/
-// │   └── resumes/
-// └── src/
-//     └── app.js
-//
-// Public URL:
-// /uploads/resumes/example.pdf
-//
-// Physical file:
-// uploads/resumes/example.pdf
-//
 
 await app.register(fastifyStatic, {
   root: path.join(__dirname, "../uploads"),
@@ -150,6 +142,14 @@ await app.register(applicationRoutes, {
 
 await app.register(jobRoutes, {
   prefix: "/api/jobs",
+});
+
+// ============================================
+// SAVED JOBS ROUTES
+// ============================================
+
+await app.register(savedJobsRoutes, {
+  prefix: "/api/saved-jobs",
 });
 
 // ============================================

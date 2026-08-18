@@ -35,29 +35,107 @@ export const getMyResumesController = async (request, reply) => {
 
 export const createResumeController = async (request, reply) => {
   try {
+    console.log("\n========================================");
+    console.log("RESUME UPLOAD REQUEST RECEIVED");
+    console.log("========================================");
+
     const userId = request.user.userId;
+
+    console.log("[1] User ID:", userId);
+
+    // ========================================
+    // GET MULTIPART FILE
+    // ========================================
+
+    console.log("[2] Reading multipart file...");
 
     const file = await request.file();
 
     if (!file) {
+      console.log("[ERROR] No multipart file received");
+
       return reply.code(400).send({
         success: false,
         message: "Resume file is required",
       });
     }
 
-    const result = await createResume({
+    console.log("[3] File received successfully");
+    console.log("Filename:", file.filename);
+    console.log("Mimetype:", file.mimetype);
+    console.log("Fieldname:", file.fieldname);
+
+    // ========================================
+    // CREATE RESUME
+    // ========================================
+
+    console.log("[4] Sending file to resume service...");
+
+    const resume = await createResume({
       userId,
       file,
     });
 
+    console.log("[5] Resume service completed");
+    console.log("Resume ID:", resume?.id);
+
+    // ========================================
+    // PUBLIC RESPONSE
+    // ========================================
+    //
+    // Database contains full resumeData JSON.
+    // We DO NOT expose the complete parsed JSON
+    // here.
+    //
+    // Return only information needed by frontend.
+    // ========================================
+
     return reply.code(201).send({
       success: true,
       message: "Resume uploaded and processed successfully",
-      data: result,
+
+      data: {
+        id: resume.id,
+        fileName: resume.fileName,
+        fileUrl: resume.fileUrl,
+        parseStatus: resume.parseStatus,
+        parserVersion: resume.parserVersion,
+
+        // User-facing useful information only
+        summary:
+          resume.resumeData?.summary || "",
+
+        candidateName:
+          resume.resumeData?.personalInfo?.name ||
+          "",
+
+        email:
+          resume.resumeData?.personalInfo?.email ||
+          "",
+
+        phone:
+          resume.resumeData?.personalInfo?.phone ||
+          "",
+
+        skills:
+          resume.resumeData?.skills || [],
+
+        education:
+          resume.resumeData?.education || [],
+
+        experience:
+          resume.resumeData?.experience || [],
+      },
     });
   } catch (error) {
     request.log.error(error);
+
+    console.error("\n========================================");
+    console.error("RESUME CONTROLLER ERROR");
+    console.error("========================================");
+
+    console.error("Message:", error.message);
+    console.error("Stack:", error.stack);
 
     return reply.code(error.statusCode || 500).send({
       success: false,
@@ -87,9 +165,44 @@ export const getResumeController = async (request, reply) => {
       });
     }
 
+    // ========================================
+    // PUBLIC RESPONSE
+    // ========================================
+
     return reply.code(200).send({
       success: true,
-      data: resume,
+
+      data: {
+        id: resume.id,
+        fileName: resume.fileName,
+        fileUrl: resume.fileUrl,
+        parseStatus: resume.parseStatus,
+        parserVersion: resume.parserVersion,
+
+        summary:
+          resume.resumeData?.summary || "",
+
+        candidateName:
+          resume.resumeData?.personalInfo?.name ||
+          "",
+
+        email:
+          resume.resumeData?.personalInfo?.email ||
+          "",
+
+        phone:
+          resume.resumeData?.personalInfo?.phone ||
+          "",
+
+        skills:
+          resume.resumeData?.skills || [],
+
+        education:
+          resume.resumeData?.education || [],
+
+        experience:
+          resume.resumeData?.experience || [],
+      },
     });
   } catch (error) {
     request.log.error(error);

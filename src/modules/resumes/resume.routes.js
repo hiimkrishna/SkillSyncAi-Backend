@@ -6,6 +6,22 @@ import {
 } from "./resume.controller.js";
 
 export default async function resumeRoutes(fastify) {
+  // ============================================
+  // GET MY RESUMES
+  // ============================================
+
+  fastify.get(
+    "/my",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    getMyResumesController
+  );
+
+  // ============================================
+  // GET ALL MY RESUMES
+  // ============================================
+
   fastify.get(
     "/",
     {
@@ -13,6 +29,10 @@ export default async function resumeRoutes(fastify) {
     },
     getMyResumesController
   );
+
+  // ============================================
+  // CREATE RESUME
+  // ============================================
 
   fastify.post(
     "/",
@@ -22,6 +42,11 @@ export default async function resumeRoutes(fastify) {
     createResumeController
   );
 
+  // ============================================
+  // GET ONE RESUME
+  // IMPORTANT: keep this AFTER /my
+  // ============================================
+
   fastify.get(
     "/:id",
     {
@@ -29,6 +54,10 @@ export default async function resumeRoutes(fastify) {
     },
     getResumeController
   );
+
+  // ============================================
+  // DELETE RESUME
+  // ============================================
 
   fastify.delete(
     "/:id",
