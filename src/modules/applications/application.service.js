@@ -1,8 +1,9 @@
 // src/modules/applications/application.service.js
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
+
 import { applications } from "../../db/schema/applications.js";
 import { jobs } from "../../db/schema/jobs.js";
 import { users } from "../../db/schema/users.js";
@@ -12,7 +13,10 @@ import { users } from "../../db/schema/users.js";
 // ============================================
 
 export const applyToJob = async (candidateId, jobId) => {
-  // 1. Check candidate
+  // ============================================
+  // CHECK CANDIDATE
+  // ============================================
+
   const [candidate] = await db
     .select({
       id: users.id,
@@ -30,7 +34,10 @@ export const applyToJob = async (candidateId, jobId) => {
     throw new Error("User is not a candidate");
   }
 
-  // 2. Check job
+  // ============================================
+  // CHECK JOB
+  // ============================================
+
   const [job] = await db
     .select({
       id: jobs.id,
@@ -44,12 +51,18 @@ export const applyToJob = async (candidateId, jobId) => {
     throw new Error("Job not found");
   }
 
-  // 3. Job must be open
+  // ============================================
+  // JOB MUST BE OPEN
+  // ============================================
+
   if (job.status !== "open") {
     throw new Error("Job is not open for applications");
   }
 
-  // 4. Check duplicate application
+  // ============================================
+  // CHECK DUPLICATE APPLICATION
+  // ============================================
+
   const [existingApplication] = await db
     .select({
       id: applications.id,
@@ -67,7 +80,10 @@ export const applyToJob = async (candidateId, jobId) => {
     throw new Error("Already applied to this job");
   }
 
-  // 5. Create application
+  // ============================================
+  // CREATE APPLICATION
+  // ============================================
+
   const [application] = await db
     .insert(applications)
     .values({
@@ -85,6 +101,10 @@ export const applyToJob = async (candidateId, jobId) => {
 // ============================================
 
 export const getMyApplications = async (candidateId) => {
+  // ============================================
+  // CHECK CANDIDATE
+  // ============================================
+
   const [candidate] = await db
     .select({
       id: users.id,
@@ -102,11 +122,28 @@ export const getMyApplications = async (candidateId) => {
     throw new Error("User is not a candidate");
   }
 
+  // ============================================
+  // GET APPLICATIONS
+  // ============================================
+
   return db
     .select({
       id: applications.id,
+
       status: applications.status,
+
+      rejectionReason: applications.rejectionReason,
+
+      shortlistNotes: applications.shortlistNotes,
+
+      shortlistPriority: applications.shortlistPriority,
+
+      interviewDetails: applications.interviewDetails,
+
+      offerDetails: applications.offerDetails,
+
       createdAt: applications.createdAt,
+
       updatedAt: applications.updatedAt,
 
       job: {
@@ -116,15 +153,14 @@ export const getMyApplications = async (candidateId) => {
         location: jobs.location,
         type: jobs.type,
         status: jobs.status,
+        salaryMin: jobs.salaryMin,
+        salaryMax: jobs.salaryMax,
       },
     })
     .from(applications)
-    .innerJoin(
-      jobs,
-      eq(applications.jobId, jobs.id),
-    )
+    .innerJoin(jobs, eq(applications.jobId, jobs.id))
     .where(eq(applications.candidateId, candidateId))
-    .orderBy(applications.createdAt);
+    .orderBy(desc(applications.createdAt));
 };
 
 // ============================================
@@ -132,7 +168,10 @@ export const getMyApplications = async (candidateId) => {
 // ============================================
 
 export const getRecruiterApplications = async (recruiterId) => {
-  // Check recruiter
+  // ============================================
+  // CHECK RECRUITER
+  // ============================================
+
   const [recruiter] = await db
     .select({
       id: users.id,
@@ -150,12 +189,29 @@ export const getRecruiterApplications = async (recruiterId) => {
     throw new Error("User is not a recruiter");
   }
 
-  // Get applications belonging to recruiter's jobs
+  // ============================================
+  // GET APPLICATIONS
+  // BELONGING TO RECRUITER'S JOBS
+  // ============================================
+
   return db
     .select({
       id: applications.id,
+
       status: applications.status,
+
+      rejectionReason: applications.rejectionReason,
+
+      shortlistNotes: applications.shortlistNotes,
+
+      shortlistPriority: applications.shortlistPriority,
+
+      interviewDetails: applications.interviewDetails,
+
+      offerDetails: applications.offerDetails,
+
       createdAt: applications.createdAt,
+
       updatedAt: applications.updatedAt,
 
       job: {
@@ -165,65 +221,75 @@ export const getRecruiterApplications = async (recruiterId) => {
         location: jobs.location,
         type: jobs.type,
         status: jobs.status,
+        salaryMin: jobs.salaryMin,
+        salaryMax: jobs.salaryMax,
       },
 
       candidate: {
         id: users.id,
+        fullName: users.fullName,
         email: users.email,
       },
     })
     .from(applications)
-    .innerJoin(
-      jobs,
-      eq(applications.jobId, jobs.id),
-    )
-    .innerJoin(
-      users,
-      eq(applications.candidateId, users.id),
-    )
+    .innerJoin(jobs, eq(applications.jobId, jobs.id))
+    .innerJoin(users, eq(applications.candidateId, users.id))
     .where(eq(jobs.recruiterId, recruiterId))
-    .orderBy(applications.createdAt);
+    .orderBy(desc(applications.createdAt));
 };
 
 // ============================================
 // GET SINGLE APPLICATION
 // ============================================
 
-export const getApplicationById = async (
-  applicationId,
-  userId,
-  userRole,
-) => {
+export const getApplicationById = async (applicationId, userId, userRole) => {
+  // ============================================
+  // GET APPLICATION
+  // ============================================
+
   const [application] = await db
     .select({
       id: applications.id,
+
+      candidateId: applications.candidateId,
+
       status: applications.status,
+
+      rejectionReason: applications.rejectionReason,
+
+      shortlistNotes: applications.shortlistNotes,
+
+      shortlistPriority: applications.shortlistPriority,
+
+      interviewDetails: applications.interviewDetails,
+
+      offerDetails: applications.offerDetails,
+
       createdAt: applications.createdAt,
+
       updatedAt: applications.updatedAt,
 
       job: {
         id: jobs.id,
+        recruiterId: jobs.recruiterId,
         title: jobs.title,
         company: jobs.company,
         location: jobs.location,
         type: jobs.type,
         status: jobs.status,
+        salaryMin: jobs.salaryMin,
+        salaryMax: jobs.salaryMax,
       },
 
       candidate: {
         id: users.id,
+        fullName: users.fullName,
         email: users.email,
       },
     })
     .from(applications)
-    .innerJoin(
-      jobs,
-      eq(applications.jobId, jobs.id),
-    )
-    .innerJoin(
-      users,
-      eq(applications.candidateId, users.id),
-    )
+    .innerJoin(jobs, eq(applications.jobId, jobs.id))
+    .innerJoin(users, eq(applications.candidateId, users.id))
     .where(eq(applications.id, applicationId))
     .limit(1);
 
@@ -231,46 +297,100 @@ export const getApplicationById = async (
     return null;
   }
 
-  // Candidate can only see their own application
+  // ============================================
+  // CANDIDATE ACCESS
+  // ============================================
+
   if (userRole === "candidate") {
-    if (application.candidate.id !== userId) {
+    if (application.candidateId !== userId) {
       return null;
     }
   }
 
-  // Recruiter can only see applications for their jobs
+  // ============================================
+  // RECRUITER ACCESS
+  // ============================================
+
   if (userRole === "recruiter") {
-    const [job] = await db
-      .select({
-        recruiterId: jobs.recruiterId,
-      })
-      .from(jobs)
-      .where(eq(jobs.id, application.job.id))
-      .limit(1);
-
-    if (!job || job.recruiterId !== userId) {
+    if (application.job.recruiterId !== userId) {
       return null;
     }
   }
 
-  return application;
+  // ============================================
+  // RETURN CLEAN RESPONSE
+  // ============================================
+
+  return {
+    id: application.id,
+
+    status: application.status,
+
+    rejectionReason: application.rejectionReason,
+
+    shortlistNotes: application.shortlistNotes,
+
+    shortlistPriority: application.shortlistPriority,
+
+    interviewDetails: application.interviewDetails,
+
+    offerDetails: application.offerDetails,
+
+    createdAt: application.createdAt,
+
+    updatedAt: application.updatedAt,
+
+    job: {
+      id: application.job.id,
+      title: application.job.title,
+      company: application.job.company,
+      location: application.job.location,
+      type: application.job.type,
+      status: application.job.status,
+      salaryMin: application.job.salaryMin,
+      salaryMax: application.job.salaryMax,
+    },
+
+    candidate: {
+      id: application.candidate.id,
+      fullName: application.candidate.fullName,
+      email: application.candidate.email,
+    },
+  };
 };
 
 // ============================================
-// UPDATE APPLICATION STATUS
+// UPDATE APPLICATION STATUS + DETAILS
 // ============================================
 
 export const updateApplicationStatus = async (
   applicationId,
   userId,
   userRole,
-  status,
+  {
+    status,
+    rejectionReason,
+    shortlistNotes,
+    shortlistPriority,
+    interviewDetails,
+    offerDetails,
+  },
 ) => {
-  // Get application
+  // ============================================
+  // ONLY RECRUITER CAN UPDATE
+  // ============================================
+
+  if (userRole !== "recruiter") {
+    throw new Error("Only recruiters can update application status");
+  }
+
+  // ============================================
+  // GET APPLICATION
+  // ============================================
+
   const [application] = await db
     .select({
       id: applications.id,
-      candidateId: applications.candidateId,
       jobId: applications.jobId,
     })
     .from(applications)
@@ -281,53 +401,81 @@ export const updateApplicationStatus = async (
     throw new Error("Application not found");
   }
 
-  // ==========================================
-  // RECRUITER
-  // ==========================================
+  // ============================================
+  // GET JOB
+  // ============================================
 
-  if (userRole === "recruiter") {
-    const [job] = await db
-      .select({
-        id: jobs.id,
-        recruiterId: jobs.recruiterId,
-      })
-      .from(jobs)
-      .where(eq(jobs.id, application.jobId))
-      .limit(1);
+  const [job] = await db
+    .select({
+      id: jobs.id,
+      recruiterId: jobs.recruiterId,
+    })
+    .from(jobs)
+    .where(eq(jobs.id, application.jobId))
+    .limit(1);
 
-    if (!job) {
-      throw new Error("Job not found");
-    }
-
-    if (job.recruiterId !== userId) {
-      throw new Error(
-        "You are not authorized to update this application",
-      );
-    }
+  if (!job) {
+    throw new Error("Job not found");
   }
 
-  // ==========================================
-  // CANDIDATE
-  // ==========================================
+  // ============================================
+  // CHECK OWNERSHIP
+  // ============================================
 
-  if (userRole === "candidate") {
-    if (application.candidateId !== userId) {
-      throw new Error(
-        "You are not authorized to update this application",
-      );
-    }
+  if (job.recruiterId !== userId) {
+    throw new Error("You are not authorized to update this application");
   }
 
-  // ==========================================
-  // UPDATE
-  // ==========================================
+  // ============================================
+  // BUILD UPDATE DATA
+  // ============================================
+
+  const updateData = {
+    status,
+    updatedAt: new Date(),
+  };
+
+  // ============================================
+  // REJECTION
+  // ============================================
+
+  if (status === "rejected") {
+    updateData.rejectionReason = rejectionReason?.trim() || null;
+  }
+
+  // ============================================
+  // SHORTLIST
+  // ============================================
+
+  if (status === "shortlisted") {
+    updateData.shortlistNotes = shortlistNotes?.trim() || null;
+
+    updateData.shortlistPriority = shortlistPriority || "medium";
+  }
+
+  // ============================================
+  // INTERVIEW
+  // ============================================
+
+  if (status === "interview") {
+    updateData.interviewDetails = interviewDetails || null;
+  }
+
+  // ============================================
+  // OFFER
+  // ============================================
+
+  if (status === "offer") {
+    updateData.offerDetails = offerDetails || null;
+  }
+
+  // ============================================
+  // UPDATE DATABASE
+  // ============================================
 
   const [updatedApplication] = await db
     .update(applications)
-    .set({
-      status,
-      updatedAt: new Date(),
-    })
+    .set(updateData)
     .where(eq(applications.id, applicationId))
     .returning();
 

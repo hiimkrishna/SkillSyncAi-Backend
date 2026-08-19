@@ -1,10 +1,22 @@
 import {
   findUserById,
   findCandidateProfileByUserId,
+
+  // Candidate
   getApplicationCount,
   getInterviewCount,
   getRecentApplications,
   getRecommendedJobs,
+
+  // Recruiter
+  getRecruiterJobCount,
+  getRecruiterOpenJobCount,
+  getRecruiterClosedJobCount,
+  getRecruiterApplicationCount,
+  getRecruiterPendingApplicationCount,
+  getRecruiterShortlistedCount,
+  getRecruiterRejectedCount,
+  getRecentRecruiterApplications,
 } from "./dashboard.repository.js";
 
 import { calculateProfileCompletion } from "../../utils/profile-completion.js";
@@ -16,7 +28,7 @@ import { getSavedJobsCount } from "../saved-jobs/saved-jobs.service.js";
 
 export const getDashboardData = async (userId) => {
   // ============================================
-  // USER
+  // GET USER
   // ============================================
 
   const user = await findUserById(userId);
@@ -30,22 +42,42 @@ export const getDashboardData = async (userId) => {
   }
 
   // ============================================
-  // ROLE CHECK
+  // RECRUITER DASHBOARD
   // ============================================
 
-  if (user.role !== "candidate") {
-    const error = new Error("Candidate access required");
-
-    error.statusCode = 403;
-
-    throw error;
+  if (user.role === "recruiter") {
+    return getRecruiterDashboardData(user);
   }
 
+  // ============================================
+  // CANDIDATE DASHBOARD
+  // ============================================
+
+  if (user.role === "candidate") {
+    return getCandidateDashboardData(user);
+  }
+
+  // ============================================
+  // UNSUPPORTED ROLE
+  // ============================================
+
+  const error = new Error("Dashboard access required");
+
+  error.statusCode = 403;
+
+  throw error;
+};
+
+// ============================================
+// GET CANDIDATE DASHBOARD
+// ============================================
+
+const getCandidateDashboardData = async (user) => {
   // ============================================
   // LOAD CANDIDATE PROFILE
   // ============================================
 
-  const profile = await findCandidateProfileByUserId(userId);
+  const profile = await findCandidateProfileByUserId(user.id);
 
   // ============================================
   // PROFILE COMPLETION
@@ -60,23 +92,23 @@ export const getDashboardData = async (userId) => {
   // LOAD DASHBOARD DATA
   // ============================================
 
-const [
-  applicationCount,
-  interviewCount,
-  savedJobsCount,
-  recentApplications,
-  recommendedJobs,
-] = await Promise.all([
-  getApplicationCount(user.id),
+  const [
+    applicationCount,
+    interviewCount,
+    savedJobsCount,
+    recentApplications,
+    recommendedJobs,
+  ] = await Promise.all([
+    getApplicationCount(user.id),
 
-  getInterviewCount(user.id),
+    getInterviewCount(user.id),
 
-  getSavedJobsCount(user.id),
+    getSavedJobsCount(user.id),
 
-  getRecentApplications(user.id),
+    getRecentApplications(user.id),
 
-  getRecommendedJobs(user.id),
-]);
+    getRecommendedJobs(user.id),
+  ]);
 
   // ============================================
   // QUICK STATS
@@ -174,6 +206,10 @@ const [
     (item) => item.id === "headline" && item.completed,
   );
 
+  // ==========================================
+  // SKILLS TIP
+  // ==========================================
+
   if (!skillsCompleted) {
     aiTips.push({
       id: "skills",
@@ -188,6 +224,10 @@ const [
     });
   }
 
+  // ==========================================
+  // EXPERIENCE TIP
+  // ==========================================
+
   if (!experienceCompleted) {
     aiTips.push({
       id: "experience",
@@ -201,6 +241,10 @@ const [
       href: "/profile",
     });
   }
+
+  // ==========================================
+  // HEADLINE TIP
+  // ==========================================
 
   if (!headlineCompleted) {
     aiTips.push({
@@ -249,7 +293,7 @@ const [
   const resumeChecklist = [];
 
   // ============================================
-  // FINAL RESPONSE
+  // FINAL CANDIDATE RESPONSE
   // ============================================
 
   return {
@@ -282,11 +326,183 @@ const [
 };
 
 // ============================================
+// GET RECRUITER DASHBOARD
+// ============================================
+
+const getRecruiterDashboardData = async (user) => {
+  // ==========================================
+  // LOAD RECRUITER DASHBOARD DATA
+  // ==========================================
+
+  const [
+    totalJobs,
+    openJobs,
+    closedJobs,
+
+    totalApplications,
+    pendingApplications,
+    shortlistedApplications,
+    rejectedApplications,
+
+    recentApplications,
+  ] = await Promise.all([
+    getRecruiterJobCount(user.id),
+
+    getRecruiterOpenJobCount(user.id),
+
+    getRecruiterClosedJobCount(user.id),
+
+    getRecruiterApplicationCount(user.id),
+
+    getRecruiterPendingApplicationCount(user.id),
+
+    getRecruiterShortlistedCount(user.id),
+
+    getRecruiterRejectedCount(user.id),
+
+    getRecentRecruiterApplications(user.id),
+  ]);
+
+  // ==========================================
+  // QUICK STATS
+  // ==========================================
+
+  const quickStats = [
+    {
+      title: "Total Jobs",
+
+      value: totalJobs,
+
+      icon: "jobs",
+
+      change: null,
+
+      href: "/recruiter/jobs",
+    },
+
+    {
+      title: "Active Jobs",
+
+      value: openJobs,
+
+      icon: "activeJobs",
+
+      change: null,
+
+      href: "/recruiter/jobs?status=open",
+    },
+
+    {
+      title: "Applications",
+
+      value: totalApplications,
+
+      icon: "applications",
+
+      change: null,
+
+      href: "/recruiter/applications",
+    },
+
+    {
+      title: "Shortlisted",
+
+      value: shortlistedApplications,
+
+      icon: "shortlisted",
+
+      change: null,
+
+      href: "/recruiter/applications?status=shortlisted",
+    },
+  ];
+
+  // ==========================================
+  // FORMAT RECENT APPLICATIONS
+  // ==========================================
+
+  const formattedApplications = recentApplications.map((application) => ({
+    id: application.id,
+
+    candidateId: application.candidateId,
+
+    candidateName: application.candidateName,
+
+    candidateEmail: application.candidateEmail,
+
+    jobId: application.jobId,
+
+    position: application.position,
+
+    company: application.company,
+
+    status: application.status,
+
+    appliedAt: application.appliedAt,
+  }));
+
+  // ==========================================
+  // ACTIVITY TIMELINE
+  // ==========================================
+
+  const activities = recentApplications.map((application) => ({
+    id: application.id,
+
+    title: `${application.candidateName} applied for ${application.position}`,
+
+    timestamp: application.appliedAt,
+
+    type: "application",
+
+    status: application.status,
+  }));
+
+  // ==========================================
+  // FINAL RECRUITER RESPONSE
+  // ==========================================
+
+  return {
+    user: {
+      id: user.id,
+
+      name: user.fullName,
+
+      email: user.email,
+    },
+
+    quickStats,
+
+    jobs: {
+      total: totalJobs,
+
+      open: openJobs,
+
+      closed: closedJobs,
+    },
+
+    applications: {
+      total: totalApplications,
+
+      pending: pendingApplications,
+
+      shortlisted: shortlistedApplications,
+
+      rejected: rejectedApplications,
+    },
+
+    recentApplications: formattedApplications,
+
+    activities,
+  };
+};
+
+// ============================================
 // SALARY FORMATTER
 // ============================================
 
 const formatSalaryRange = (min, max) => {
   const minimum = Number(min);
+
   const maximum = Number(max);
 
   const hasMin = Number.isFinite(minimum) && minimum > 0;

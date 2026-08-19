@@ -1,8 +1,11 @@
 import {
   getAllJobs,
   getSingleJob,
+  getMyJobs,
+  getMySingleJob,
   createNewJob,
   updateExistingJob,
+  updateJobStatusController,
   removeJob,
 } from "./job.controller.js";
 
@@ -11,10 +14,14 @@ import {
   jobIdSchema,
   createJobSchema,
   updateJobSchema,
+  updateJobStatusSchema,
 } from "./job.schemas.js";
 
 export default async function jobRoutes(app) {
-  // Public — candidate can browse jobs
+  // ==========================================
+  // PUBLIC JOB LIST
+  // ==========================================
+
   app.get(
     "/",
     {
@@ -23,42 +30,106 @@ export default async function jobRoutes(app) {
     getAllJobs,
   );
 
-  // Public — candidate can view a single job
+  // ==========================================
+  // RECRUITER'S OWN JOBS
+  // ==========================================
+
+  app.get(
+    "/recruiter",
+    {
+      preHandler: [app.authenticate, app.authorize(["recruiter"])],
+
+      schema: getJobsSchema,
+    },
+
+    getMyJobs,
+  );
+
+  // ==========================================
+  // RECRUITER'S OWN SINGLE JOB
+  // ==========================================
+
+  app.get(
+    "/recruiter/:id",
+    {
+      preHandler: [app.authenticate, app.authorize(["recruiter"])],
+
+      schema: jobIdSchema,
+    },
+
+    getMySingleJob,
+  );
+
+  // ==========================================
+  // CREATE JOB
+  // ==========================================
+
+  app.post(
+    "/",
+    {
+      preHandler: [app.authenticate, app.authorize(["recruiter"])],
+
+      schema: createJobSchema,
+    },
+
+    createNewJob,
+  );
+
+  // ==========================================
+  // UPDATE JOB
+  // ==========================================
+
+  app.patch(
+    "/:id",
+    {
+      preHandler: [app.authenticate, app.authorize(["recruiter"])],
+
+      schema: updateJobSchema,
+    },
+
+    updateExistingJob,
+  );
+
+  // ==========================================
+  // UPDATE JOB STATUS
+  // ==========================================
+
+  app.patch(
+    "/:id/status",
+    {
+      preHandler: [app.authenticate, app.authorize(["recruiter"])],
+
+      schema: updateJobStatusSchema,
+    },
+
+    updateJobStatusController,
+  );
+
+  // ==========================================
+  // DELETE JOB
+  // ==========================================
+
+  app.delete(
+    "/:id",
+    {
+      preHandler: [app.authenticate, app.authorize(["recruiter"])],
+
+      schema: jobIdSchema,
+    },
+
+    removeJob,
+  );
+
+  // ==========================================
+  // PUBLIC SINGLE JOB
+  // ==========================================
+
   app.get(
     "/:id",
     {
       schema: jobIdSchema,
     },
+
     getSingleJob,
-  );
-
-  // Recruiter only
-  app.post(
-    "/",
-    {
-      preHandler: [app.authenticate, app.authorize(["recruiter"])],
-      schema: createJobSchema,
-    },
-    createNewJob,
-  );
-
-  // Recruiter only
-  app.patch(
-    "/:id",
-    {
-      preHandler: [app.authenticate, app.authorize(["recruiter"])],
-      schema: updateJobSchema,
-    },
-    updateExistingJob,
-  );
-
-  // Recruiter only
-  app.delete(
-    "/:id",
-    {
-      preHandler: [app.authenticate, app.authorize(["recruiter"])],
-      schema: jobIdSchema,
-    },
-    removeJob,
   );
 }

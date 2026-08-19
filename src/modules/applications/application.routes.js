@@ -1,3 +1,5 @@
+// src/modules/applications/application.routes.js
+
 import {
   applyToJobController,
   getMyApplicationsController,
@@ -5,6 +7,12 @@ import {
   getApplicationController,
   updateApplicationStatusController,
 } from "./application.controller.js";
+
+import {
+  applyToJobSchema,
+  applicationIdSchema,
+  updateApplicationStatusSchema,
+} from "./application.schema.js";
 
 export default async function applicationRoutes(fastify) {
   // ============================================
@@ -15,9 +23,11 @@ export default async function applicationRoutes(fastify) {
   fastify.post(
     "/",
     {
-      preHandler: [fastify.authenticate],
+      schema: applyToJobSchema,
+
+      preHandler: [fastify.authenticate, fastify.authorize(["candidate"])],
     },
-    applyToJobController
+    applyToJobController,
   );
 
   // ============================================
@@ -28,9 +38,9 @@ export default async function applicationRoutes(fastify) {
   fastify.get(
     "/my",
     {
-      preHandler: [fastify.authenticate],
+      preHandler: [fastify.authenticate, fastify.authorize(["candidate"])],
     },
-    getMyApplicationsController
+    getMyApplicationsController,
   );
 
   // ============================================
@@ -41,22 +51,9 @@ export default async function applicationRoutes(fastify) {
   fastify.get(
     "/recruiter",
     {
-      preHandler: [fastify.authenticate],
+      preHandler: [fastify.authenticate, fastify.authorize(["recruiter"])],
     },
-    getRecruiterApplicationsController
-  );
-
-  // ============================================
-  // SINGLE APPLICATION
-  // GET /api/applications/:id
-  // ============================================
-
-  fastify.get(
-    "/:id",
-    {
-      preHandler: [fastify.authenticate],
-    },
-    getApplicationController
+    getRecruiterApplicationsController,
   );
 
   // ============================================
@@ -67,8 +64,25 @@ export default async function applicationRoutes(fastify) {
   fastify.patch(
     "/:id/status",
     {
+      schema: updateApplicationStatusSchema,
+
+      preHandler: [fastify.authenticate, fastify.authorize(["recruiter"])],
+    },
+    updateApplicationStatusController,
+  );
+
+  // ============================================
+  // GET SINGLE APPLICATION
+  // GET /api/applications/:id
+  // ============================================
+
+  fastify.get(
+    "/:id",
+    {
+      schema: applicationIdSchema,
+
       preHandler: [fastify.authenticate],
     },
-    updateApplicationStatusController
+    getApplicationController,
   );
 }

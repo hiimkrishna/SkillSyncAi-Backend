@@ -24,6 +24,7 @@ import dashboardRoutes from "./modules/dashboard/dashboard.routes.js";
 import applicationRoutes from "./modules/applications/application.routes.js";
 import resumeRoutes from "./modules/resumes/resume.routes.js";
 import savedJobsRoutes from "./modules/saved-jobs/saved-jobs.routes.js";
+import recruiterRoutes from "./modules/recruiters/recruiter.routes.js";
 
 // ============================================
 // PATH CONFIGURATION
@@ -56,19 +57,9 @@ await app.register(fastifyStatic, {
 await app.register(cors, {
   origin: true,
 
-  methods: [
-    "GET",
-    "POST",
-    "PUT",
-    "PATCH",
-    "DELETE",
-    "OPTIONS",
-  ],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-  ],
+  allowedHeaders: ["Content-Type", "Authorization"],
 });
 
 // ============================================
@@ -151,6 +142,16 @@ await app.register(jobRoutes, {
 await app.register(savedJobsRoutes, {
   prefix: "/api/saved-jobs",
 });
+
+
+
+await app.register(
+  recruiterRoutes,
+  {
+    prefix: "/api/recruiters",
+  }
+);
+
 
 // ============================================
 // HEALTH CHECK

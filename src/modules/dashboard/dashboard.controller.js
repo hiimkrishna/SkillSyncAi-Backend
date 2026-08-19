@@ -3,7 +3,7 @@ import {
 } from "./dashboard.service.js";
 
 // ============================================
-// GET CANDIDATE DASHBOARD
+// GET MY DASHBOARD
 // ============================================
 
 export const getDashboard = async (

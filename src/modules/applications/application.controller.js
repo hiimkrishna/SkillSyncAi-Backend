@@ -10,12 +10,12 @@ import {
 
 // ============================================
 // APPLY TO JOB
+// POST /api/applications
 // ============================================
 
 export const applyToJobController = async (request, reply) => {
   try {
-    const { jobId } = request.body;
-
+    const { jobId } = request.body || {};
     const candidateId = request.user.userId;
 
     if (!jobId) {
@@ -35,15 +35,16 @@ export const applyToJobController = async (request, reply) => {
   } catch (error) {
     request.log.error(error);
 
-    return reply.code(400).send({
+    return reply.code(error.statusCode || 400).send({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to apply for job",
     });
   }
 };
 
 // ============================================
-// GET MY APPLICATIONS - CANDIDATE
+// GET MY APPLICATIONS
+// GET /api/applications/my
 // ============================================
 
 export const getMyApplicationsController = async (request, reply) => {
@@ -59,21 +60,19 @@ export const getMyApplicationsController = async (request, reply) => {
   } catch (error) {
     request.log.error(error);
 
-    return reply.code(400).send({
+    return reply.code(error.statusCode || 400).send({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to fetch applications",
     });
   }
 };
 
 // ============================================
 // GET RECRUITER APPLICATIONS
+// GET /api/applications/recruiter
 // ============================================
 
-export const getRecruiterApplicationsController = async (
-  request,
-  reply,
-) => {
+export const getRecruiterApplicationsController = async (request, reply) => {
   try {
     const recruiterId = request.user.userId;
 
@@ -86,20 +85,28 @@ export const getRecruiterApplicationsController = async (
   } catch (error) {
     request.log.error(error);
 
-    return reply.code(400).send({
+    return reply.code(error.statusCode || 400).send({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to fetch recruiter applications",
     });
   }
 };
 
 // ============================================
 // GET SINGLE APPLICATION
+// GET /api/applications/:id
 // ============================================
 
 export const getApplicationController = async (request, reply) => {
   try {
-    const { id } = request.params;
+    const { id } = request.params || {};
+
+    if (!id) {
+      return reply.code(400).send({
+        success: false,
+        message: "Application ID is required",
+      });
+    }
 
     const application = await getApplicationById(
       id,
@@ -121,24 +128,45 @@ export const getApplicationController = async (request, reply) => {
   } catch (error) {
     request.log.error(error);
 
-    return reply.code(400).send({
+    return reply.code(error.statusCode || 400).send({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to fetch application",
     });
   }
 };
 
 // ============================================
-// UPDATE APPLICATION STATUS
+// UPDATE APPLICATION
+// PATCH /api/applications/:id/status
 // ============================================
 
-export const updateApplicationStatusController = async (
-  request,
-  reply,
-) => {
+export const updateApplicationStatusController = async (request, reply) => {
   try {
-    const { id } = request.params;
-    const { status } = request.body;
+    const { id } = request.params || {};
+
+    const {
+      status,
+      rejectionReason,
+      shortlistNotes,
+      shortlistPriority,
+      interviewDetails,
+      offerDetails,
+    } = request.body || {};
+
+    // ============================================
+    // VALIDATE APPLICATION ID
+    // ============================================
+
+    if (!id) {
+      return reply.code(400).send({
+        success: false,
+        message: "Application ID is required",
+      });
+    }
+
+    // ============================================
+    // VALIDATE STATUS
+    // ============================================
 
     if (!status) {
       return reply.code(400).send({
@@ -150,6 +178,7 @@ export const updateApplicationStatusController = async (
     const allowedStatuses = [
       "pending",
       "screening",
+      "shortlisted",
       "interview",
       "offer",
       "rejected",
@@ -162,24 +191,78 @@ export const updateApplicationStatusController = async (
       });
     }
 
+    // ============================================
+    // ONLY RECRUITER CAN UPDATE
+    // ============================================
+
+    if (request.user.role !== "recruiter") {
+      return reply.code(403).send({
+        success: false,
+        message: "Only recruiters can update application status",
+      });
+    }
+
+    // ============================================
+    // STATUS-SPECIFIC VALIDATION
+    // ============================================
+
+    if (status === "rejected") {
+      if (!rejectionReason?.trim()) {
+        return reply.code(400).send({
+          success: false,
+          message: "Rejection reason is required",
+        });
+      }
+    }
+
+    if (status === "shortlisted") {
+      if (
+        shortlistPriority &&
+        !["low", "medium", "high", "urgent"].includes(shortlistPriority)
+      ) {
+        return reply.code(400).send({
+          success: false,
+          message: "Invalid shortlist priority",
+        });
+      }
+    }
+
+    // ============================================
+    // UPDATE APPLICATION
+    // ============================================
+
     const application = await updateApplicationStatus(
       id,
       request.user.userId,
       request.user.role,
-      status,
+      {
+        status,
+        rejectionReason,
+        shortlistNotes,
+        shortlistPriority,
+        interviewDetails,
+        offerDetails,
+      },
     );
+
+    if (!application) {
+      return reply.code(404).send({
+        success: false,
+        message: "Application not found",
+      });
+    }
 
     return reply.code(200).send({
       success: true,
-      message: "Application status updated successfully",
+      message: "Application updated successfully",
       data: application,
     });
   } catch (error) {
     request.log.error(error);
 
-    return reply.code(400).send({
+    return reply.code(error.statusCode || 400).send({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to update application",
     });
   }
 };

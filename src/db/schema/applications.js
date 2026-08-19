@@ -1,7 +1,11 @@
+// src/db/schema/applications.js
+
 import {
   pgTable,
   uuid,
   varchar,
+  text,
+  jsonb,
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
@@ -12,9 +16,15 @@ import { jobs } from "./jobs.js";
 export const applications = pgTable(
   "applications",
   {
-    id: uuid("id")
-      .defaultRandom()
-      .primaryKey(),
+    // ============================================
+    // ID
+    // ============================================
+
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    // ============================================
+    // RELATIONSHIPS
+    // ============================================
 
     candidateId: uuid("candidate_id")
       .notNull()
@@ -28,11 +38,47 @@ export const applications = pgTable(
         onDelete: "cascade",
       }),
 
+    // ============================================
+    // APPLICATION STATUS
+    // ============================================
+
     status: varchar("status", {
       length: 50,
     })
       .default("pending")
       .notNull(),
+
+    // ============================================
+    // REJECTION
+    // ============================================
+
+    rejectionReason: text("rejection_reason"),
+
+    // ============================================
+    // SHORTLIST
+    // ============================================
+
+    shortlistNotes: text("shortlist_notes"),
+
+    shortlistPriority: varchar("shortlist_priority", {
+      length: 20,
+    }),
+
+    // ============================================
+    // INTERVIEW
+    // ============================================
+
+    interviewDetails: jsonb("interview_details"),
+
+    // ============================================
+    // OFFER
+    // ============================================
+
+    offerDetails: jsonb("offer_details"),
+
+    // ============================================
+    // TIMESTAMPS
+    // ============================================
 
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -49,9 +95,10 @@ export const applications = pgTable(
   },
 
   (table) => ({
-    candidateJobUnique: unique().on(
-      table.candidateId,
-      table.jobId
-    ),
-  })
+    // ============================================
+    // PREVENT DUPLICATE APPLICATION
+    // ============================================
+
+    candidateJobUnique: unique().on(table.candidateId, table.jobId),
+  }),
 );

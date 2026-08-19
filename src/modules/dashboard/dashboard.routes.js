@@ -8,7 +8,7 @@ export default async function dashboardRoutes(app) {
     {
       preHandler: [
         app.authenticate,
-        app.authorize(["candidate"]),
+        app.authorize(["candidate", "recruiter"]),
       ],
     },
     getDashboard
