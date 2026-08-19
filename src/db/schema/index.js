@@ -6,3 +6,4 @@ export * from "./jobs.js";
 export * from "./applications.js";
 export * from "./resumes.js";
 export * from "./saved-jobs.js";
+export * from "./interviews.js";

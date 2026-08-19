@@ -25,7 +25,7 @@ import applicationRoutes from "./modules/applications/application.routes.js";
 import resumeRoutes from "./modules/resumes/resume.routes.js";
 import savedJobsRoutes from "./modules/saved-jobs/saved-jobs.routes.js";
 import recruiterRoutes from "./modules/recruiters/recruiter.routes.js";
-
+import interviewRoutes from "./modules/interviews/interview.routes.js";
 // ============================================
 // PATH CONFIGURATION
 // ============================================
@@ -143,7 +143,9 @@ await app.register(savedJobsRoutes, {
   prefix: "/api/saved-jobs",
 });
 
-
+await app.register(interviewRoutes, {
+  prefix: "/api/interviews",
+});
 
 await app.register(
   recruiterRoutes,

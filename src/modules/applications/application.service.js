@@ -1,5 +1,3 @@
-// src/modules/applications/application.service.js
-
 import { and, eq, desc } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
@@ -13,34 +11,37 @@ import { users } from "../../db/schema/users.js";
 // ============================================
 
 export const applyToJob = async (candidateId, jobId) => {
-  // ============================================
-  // CHECK CANDIDATE
-  // ============================================
-
   const [candidate] = await db
     .select({
       id: users.id,
       role: users.role,
+      fullName: users.fullName,
+      email: users.email,
     })
     .from(users)
     .where(eq(users.id, candidateId))
     .limit(1);
 
   if (!candidate) {
-    throw new Error("Candidate not found");
+    const error = new Error("Candidate not found");
+    error.statusCode = 404;
+    throw error;
   }
 
   if (candidate.role !== "candidate") {
-    throw new Error("User is not a candidate");
+    const error = new Error("User is not a candidate");
+    error.statusCode = 403;
+    throw error;
   }
-
-  // ============================================
-  // CHECK JOB
-  // ============================================
 
   const [job] = await db
     .select({
       id: jobs.id,
+      recruiterId: jobs.recruiterId,
+      title: jobs.title,
+      company: jobs.company,
+      location: jobs.location,
+      type: jobs.type,
       status: jobs.status,
     })
     .from(jobs)
@@ -48,20 +49,16 @@ export const applyToJob = async (candidateId, jobId) => {
     .limit(1);
 
   if (!job) {
-    throw new Error("Job not found");
+    const error = new Error("Job not found");
+    error.statusCode = 404;
+    throw error;
   }
-
-  // ============================================
-  // JOB MUST BE OPEN
-  // ============================================
 
   if (job.status !== "open") {
-    throw new Error("Job is not open for applications");
+    const error = new Error("Job is not open for applications");
+    error.statusCode = 400;
+    throw error;
   }
-
-  // ============================================
-  // CHECK DUPLICATE APPLICATION
-  // ============================================
 
   const [existingApplication] = await db
     .select({
@@ -77,12 +74,10 @@ export const applyToJob = async (candidateId, jobId) => {
     .limit(1);
 
   if (existingApplication) {
-    throw new Error("Already applied to this job");
+    const error = new Error("Already applied to this job");
+    error.statusCode = 409;
+    throw error;
   }
-
-  // ============================================
-  // CREATE APPLICATION
-  // ============================================
 
   const [application] = await db
     .insert(applications)
@@ -93,18 +88,36 @@ export const applyToJob = async (candidateId, jobId) => {
     })
     .returning();
 
-  return application;
+  return {
+    ...application,
+
+    candidate: {
+      id: candidate.id,
+      fullName: candidate.fullName,
+      email: candidate.email,
+    },
+
+    candidateName: candidate.fullName,
+    candidateEmail: candidate.email,
+
+    job: {
+      id: job.id,
+      title: job.title,
+      company: job.company,
+      location: job.location,
+      type: job.type,
+      status: job.status,
+    },
+
+    jobTitle: job.title,
+  };
 };
 
 // ============================================
-// GET MY APPLICATIONS - CANDIDATE
+// GET MY APPLICATIONS
 // ============================================
 
 export const getMyApplications = async (candidateId) => {
-  // ============================================
-  // CHECK CANDIDATE
-  // ============================================
-
   const [candidate] = await db
     .select({
       id: users.id,
@@ -115,20 +128,23 @@ export const getMyApplications = async (candidateId) => {
     .limit(1);
 
   if (!candidate) {
-    throw new Error("Candidate not found");
+    const error = new Error("Candidate not found");
+    error.statusCode = 404;
+    throw error;
   }
 
   if (candidate.role !== "candidate") {
-    throw new Error("User is not a candidate");
+    const error = new Error("User is not a candidate");
+    error.statusCode = 403;
+    throw error;
   }
 
-  // ============================================
-  // GET APPLICATIONS
-  // ============================================
-
-  return db
+  const results = await db
     .select({
       id: applications.id,
+
+      candidateId: applications.candidateId,
+      jobId: applications.jobId,
 
       status: applications.status,
 
@@ -161,6 +177,14 @@ export const getMyApplications = async (candidateId) => {
     .innerJoin(jobs, eq(applications.jobId, jobs.id))
     .where(eq(applications.candidateId, candidateId))
     .orderBy(desc(applications.createdAt));
+
+  return results.map((application) => ({
+    ...application,
+
+    jobTitle: application.job?.title || "",
+
+    companyName: application.job?.company || "",
+  }));
 };
 
 // ============================================
@@ -168,35 +192,36 @@ export const getMyApplications = async (candidateId) => {
 // ============================================
 
 export const getRecruiterApplications = async (recruiterId) => {
-  // ============================================
-  // CHECK RECRUITER
-  // ============================================
-
+  console.log("RECRUITER ID:", recruiterId);
   const [recruiter] = await db
     .select({
       id: users.id,
       role: users.role,
+      fullName: users.fullName,
+      email: users.email,
     })
     .from(users)
     .where(eq(users.id, recruiterId))
     .limit(1);
 
   if (!recruiter) {
-    throw new Error("Recruiter not found");
+    const error = new Error("Recruiter not found");
+    error.statusCode = 404;
+    throw error;
   }
 
   if (recruiter.role !== "recruiter") {
-    throw new Error("User is not a recruiter");
+    const error = new Error("User is not a recruiter");
+    error.statusCode = 403;
+    throw error;
   }
 
-  // ============================================
-  // GET APPLICATIONS
-  // BELONGING TO RECRUITER'S JOBS
-  // ============================================
-
-  return db
+  const results = await db
     .select({
       id: applications.id,
+
+      candidateId: applications.candidateId,
+      jobId: applications.jobId,
 
       status: applications.status,
 
@@ -216,6 +241,7 @@ export const getRecruiterApplications = async (recruiterId) => {
 
       job: {
         id: jobs.id,
+        recruiterId: jobs.recruiterId,
         title: jobs.title,
         company: jobs.company,
         location: jobs.location,
@@ -236,6 +262,18 @@ export const getRecruiterApplications = async (recruiterId) => {
     .innerJoin(users, eq(applications.candidateId, users.id))
     .where(eq(jobs.recruiterId, recruiterId))
     .orderBy(desc(applications.createdAt));
+
+  return results.map((application) => ({
+    ...application,
+
+    candidateName: application.candidate?.fullName || "",
+
+    candidateEmail: application.candidate?.email || "",
+
+    jobTitle: application.job?.title || "",
+
+    companyName: application.job?.company || "",
+  }));
 };
 
 // ============================================
@@ -243,15 +281,12 @@ export const getRecruiterApplications = async (recruiterId) => {
 // ============================================
 
 export const getApplicationById = async (applicationId, userId, userRole) => {
-  // ============================================
-  // GET APPLICATION
-  // ============================================
-
   const [application] = await db
     .select({
       id: applications.id,
 
       candidateId: applications.candidateId,
+      jobId: applications.jobId,
 
       status: applications.status,
 
@@ -297,19 +332,11 @@ export const getApplicationById = async (applicationId, userId, userRole) => {
     return null;
   }
 
-  // ============================================
-  // CANDIDATE ACCESS
-  // ============================================
-
   if (userRole === "candidate") {
     if (application.candidateId !== userId) {
       return null;
     }
   }
-
-  // ============================================
-  // RECRUITER ACCESS
-  // ============================================
 
   if (userRole === "recruiter") {
     if (application.job.recruiterId !== userId) {
@@ -317,50 +344,21 @@ export const getApplicationById = async (applicationId, userId, userRole) => {
     }
   }
 
-  // ============================================
-  // RETURN CLEAN RESPONSE
-  // ============================================
-
   return {
-    id: application.id,
+    ...application,
 
-    status: application.status,
+    candidateName: application.candidate?.fullName || "",
 
-    rejectionReason: application.rejectionReason,
+    candidateEmail: application.candidate?.email || "",
 
-    shortlistNotes: application.shortlistNotes,
+    jobTitle: application.job?.title || "",
 
-    shortlistPriority: application.shortlistPriority,
-
-    interviewDetails: application.interviewDetails,
-
-    offerDetails: application.offerDetails,
-
-    createdAt: application.createdAt,
-
-    updatedAt: application.updatedAt,
-
-    job: {
-      id: application.job.id,
-      title: application.job.title,
-      company: application.job.company,
-      location: application.job.location,
-      type: application.job.type,
-      status: application.job.status,
-      salaryMin: application.job.salaryMin,
-      salaryMax: application.job.salaryMax,
-    },
-
-    candidate: {
-      id: application.candidate.id,
-      fullName: application.candidate.fullName,
-      email: application.candidate.email,
-    },
+    companyName: application.job?.company || "",
   };
 };
 
 // ============================================
-// UPDATE APPLICATION STATUS + DETAILS
+// UPDATE APPLICATION STATUS
 // ============================================
 
 export const updateApplicationStatus = async (
@@ -376,17 +374,13 @@ export const updateApplicationStatus = async (
     offerDetails,
   },
 ) => {
-  // ============================================
-  // ONLY RECRUITER CAN UPDATE
-  // ============================================
-
   if (userRole !== "recruiter") {
-    throw new Error("Only recruiters can update application status");
-  }
+    const error = new Error("Only recruiters can update application status");
 
-  // ============================================
-  // GET APPLICATION
-  // ============================================
+    error.statusCode = 403;
+
+    throw error;
+  }
 
   const [application] = await db
     .select({
@@ -398,12 +392,10 @@ export const updateApplicationStatus = async (
     .limit(1);
 
   if (!application) {
-    throw new Error("Application not found");
+    const error = new Error("Application not found");
+    error.statusCode = 404;
+    throw error;
   }
-
-  // ============================================
-  // GET JOB
-  // ============================================
 
   const [job] = await db
     .select({
@@ -415,37 +407,29 @@ export const updateApplicationStatus = async (
     .limit(1);
 
   if (!job) {
-    throw new Error("Job not found");
+    const error = new Error("Job not found");
+    error.statusCode = 404;
+    throw error;
   }
-
-  // ============================================
-  // CHECK OWNERSHIP
-  // ============================================
 
   if (job.recruiterId !== userId) {
-    throw new Error("You are not authorized to update this application");
-  }
+    const error = new Error(
+      "You are not authorized to update this application",
+    );
 
-  // ============================================
-  // BUILD UPDATE DATA
-  // ============================================
+    error.statusCode = 403;
+
+    throw error;
+  }
 
   const updateData = {
     status,
     updatedAt: new Date(),
   };
 
-  // ============================================
-  // REJECTION
-  // ============================================
-
   if (status === "rejected") {
     updateData.rejectionReason = rejectionReason?.trim() || null;
   }
-
-  // ============================================
-  // SHORTLIST
-  // ============================================
 
   if (status === "shortlisted") {
     updateData.shortlistNotes = shortlistNotes?.trim() || null;
@@ -453,25 +437,13 @@ export const updateApplicationStatus = async (
     updateData.shortlistPriority = shortlistPriority || "medium";
   }
 
-  // ============================================
-  // INTERVIEW
-  // ============================================
-
   if (status === "interview") {
     updateData.interviewDetails = interviewDetails || null;
   }
 
-  // ============================================
-  // OFFER
-  // ============================================
-
   if (status === "offer") {
     updateData.offerDetails = offerDetails || null;
   }
-
-  // ============================================
-  // UPDATE DATABASE
-  // ============================================
 
   const [updatedApplication] = await db
     .update(applications)
