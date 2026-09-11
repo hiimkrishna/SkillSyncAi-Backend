@@ -19,6 +19,16 @@ export const updateSettingsSchema = {
             type: "string",
             format: "email",
           },
+
+          phone: {
+            type: "string",
+            maxLength: 50,
+          },
+
+          companyName: {
+            type: "string",
+            maxLength: 255,
+          },
         },
       },
 
@@ -89,6 +99,22 @@ export const updateSettingsSchema = {
             },
           },
         },
+      },
+    },
+  },
+};
+
+export const verifyTwoFactorSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+
+    required: ["code"],
+
+    properties: {
+      code: {
+        type: "string",
+        pattern: "^[0-9]{6}$",
       },
     },
   },

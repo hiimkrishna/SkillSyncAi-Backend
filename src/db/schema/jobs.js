@@ -50,6 +50,14 @@ export const jobs = pgTable("jobs", {
     .default("open")
     .notNull(),
 
+  applicationDeadline: timestamp("application_deadline", {
+    withTimezone: true,
+  }),
+
+  deletedAt: timestamp("deleted_at", {
+    withTimezone: true,
+  }),
+
   createdAt: timestamp("created_at", {
     withTimezone: true,
   })

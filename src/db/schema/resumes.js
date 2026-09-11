@@ -61,6 +61,16 @@ export const resumes = pgTable("resumes", {
 
   parseError: text("parse_error"),
 
+  aiAnalysis: jsonb("ai_analysis"),
+
+  aiAnalyzedAt: timestamp("ai_analyzed_at", {
+    withTimezone: true,
+  }),
+
+  deletedAt: timestamp("deleted_at", {
+    withTimezone: true,
+  }),
+
   createdAt: timestamp("created_at", {
     withTimezone: true,
   })

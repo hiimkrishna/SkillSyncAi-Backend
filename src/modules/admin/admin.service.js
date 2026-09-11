@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
 import { users } from "../../db/schema/users.js";
@@ -20,7 +20,11 @@ export const getPendingRecruiters = async () => {
     })
     .from(users)
     .where(
-      and(eq(users.role, "recruiter"), eq(users.approvalStatus, "pending")),
+      and(
+        eq(users.role, "recruiter"),
+        eq(users.approvalStatus, "pending"),
+        isNull(users.deletedAt),
+      ),
     );
 };
 
@@ -28,7 +32,10 @@ export const getPendingRecruiters = async () => {
 // GET ALL USERS
 // ============================================
 
-export const getAllUsers = async () => {
+export const getAllUsers = async (options = {}) => {
+  const baseConditions = [isNull(users.deletedAt)];
+  if (options.role) baseConditions.push(eq(users.role, options.role));
+
   return await db
     .select({
       id: users.id,
@@ -39,7 +46,8 @@ export const getAllUsers = async () => {
       isActive: users.isActive,
       createdAt: users.createdAt,
     })
-    .from(users);
+    .from(users)
+    .where(and(...baseConditions));
 };
 
 // ============================================
@@ -58,7 +66,13 @@ export const getRecruiterById = async (userId) => {
       createdAt: users.createdAt,
     })
     .from(users)
-    .where(and(eq(users.id, userId), eq(users.role, "recruiter")));
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "recruiter"),
+        isNull(users.deletedAt),
+      ),
+    );
 
   if (!recruiter) {
     throw new Error("Recruiter not found");
@@ -78,7 +92,13 @@ export const approveRecruiter = async (userId) => {
       approvalStatus: "approved",
       isActive: true,
     })
-    .where(and(eq(users.id, userId), eq(users.role, "recruiter")))
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "recruiter"),
+        isNull(users.deletedAt),
+      ),
+    )
     .returning({
       id: users.id,
       fullName: users.fullName,
@@ -106,7 +126,13 @@ export const rejectRecruiter = async (userId) => {
       approvalStatus: "rejected",
       isActive: false,
     })
-    .where(and(eq(users.id, userId), eq(users.role, "recruiter")))
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "recruiter"),
+        isNull(users.deletedAt),
+      ),
+    )
     .returning({
       id: users.id,
       fullName: users.fullName,
@@ -145,7 +171,13 @@ export const updateRecruiter = async (userId, data) => {
   const [updatedUser] = await db
     .update(users)
     .set(updateData)
-    .where(and(eq(users.id, userId), eq(users.role, "recruiter")))
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "recruiter"),
+        isNull(users.deletedAt),
+      ),
+    )
     .returning({
       id: users.id,
       fullName: users.fullName,
@@ -172,7 +204,13 @@ export const suspendRecruiter = async (userId) => {
     .set({
       isActive: false,
     })
-    .where(and(eq(users.id, userId), eq(users.role, "recruiter")))
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "recruiter"),
+        isNull(users.deletedAt),
+      ),
+    )
     .returning({
       id: users.id,
       fullName: users.fullName,
@@ -190,13 +228,23 @@ export const suspendRecruiter = async (userId) => {
 };
 
 // ============================================
-// DELETE RECRUITER
+// DELETE RECRUITER (soft)
 // ============================================
 
 export const deleteRecruiter = async (userId) => {
   const [deletedUser] = await db
-    .delete(users)
-    .where(and(eq(users.id, userId), eq(users.role, "recruiter")))
+    .update(users)
+    .set({
+      deletedAt: new Date(),
+      isActive: false,
+    })
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "recruiter"),
+        isNull(users.deletedAt),
+      ),
+    )
     .returning({
       id: users.id,
       fullName: users.fullName,
@@ -208,5 +256,41 @@ export const deleteRecruiter = async (userId) => {
     throw new Error("Recruiter not found");
   }
 
+  // soft-delete related recruiter jobs as well
+  const { jobs } = await import("../../db/schema/jobs.js");
+  await db
+    .update(jobs)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(jobs.recruiterId, userId), isNull(jobs.deletedAt)));
+
   return deletedUser;
+};
+
+export const unsuspendRecruiter = async (userId) => {
+  const [updatedUser] = await db
+    .update(users)
+    .set({
+      isActive: true,
+    })
+    .where(
+      and(
+        eq(users.id, userId),
+        eq(users.role, "recruiter"),
+        isNull(users.deletedAt),
+      ),
+    )
+    .returning({
+      id: users.id,
+      fullName: users.fullName,
+      email: users.email,
+      role: users.role,
+      approvalStatus: users.approvalStatus,
+      isActive: users.isActive,
+    });
+
+  if (!updatedUser) {
+    throw new Error("Recruiter not found");
+  }
+
+  return updatedUser;
 };

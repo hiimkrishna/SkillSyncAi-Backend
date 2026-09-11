@@ -17,6 +17,28 @@ import {
   getRecruiterShortlistedCount,
   getRecruiterRejectedCount,
   getRecentRecruiterApplications,
+  getRecruiterRecentJobsWithCounts,
+  getRecruiterWeeklyApplicationCount,
+  getRecruiterHiredCount,
+  countUsersByRole,
+  countRecruitersByApprovalStatus,
+  countInactiveUsers,
+  countJobsByStatus,
+  countApplicationsByStatus,
+  countAllUsers,
+  countAllJobs,
+  countAllApplications,
+  countAllInterviews,
+  getRecentRecruitersForAdmin,
+  getPendingRecruitersForAdmin,
+  getAdminActivityFeed,
+  countNewUsersSince,
+  countNewJobsSince,
+  countNewApplicationsSince,
+  getTopJobsByApplications,
+  getCandidateApplicationsInRange,
+  getRecruiterApplicationsInRange,
+  getRecruiterJobsInRange,
 } from "./dashboard.repository.js";
 
 import { calculateProfileCompletion } from "../../utils/profile-completion.js";
@@ -47,6 +69,14 @@ export const getDashboardData = async (userId) => {
 
   if (user.role === "recruiter") {
     return getRecruiterDashboardData(user);
+  }
+
+  // ============================================
+  // ADMIN DASHBOARD
+  // ============================================
+
+  if (user.role === "admin") {
+    return getAdminDashboardData(user);
   }
 
   // ============================================
@@ -345,6 +375,12 @@ const getRecruiterDashboardData = async (user) => {
     rejectedApplications,
 
     recentApplications,
+
+    recentJobsWithCounts,
+
+    weeklyApplicationCount,
+
+    hiredCount,
   ] = await Promise.all([
     getRecruiterJobCount(user.id),
 
@@ -361,6 +397,12 @@ const getRecruiterDashboardData = async (user) => {
     getRecruiterRejectedCount(user.id),
 
     getRecentRecruiterApplications(user.id),
+
+    getRecruiterRecentJobsWithCounts(user.id),
+
+    getRecruiterWeeklyApplicationCount(user.id),
+
+    getRecruiterHiredCount(user.id),
   ]);
 
   // ==========================================
@@ -458,6 +500,43 @@ const getRecruiterDashboardData = async (user) => {
   }));
 
   // ==========================================
+  // FORMAT RECENT JOBS
+  // ==========================================
+
+  const formattedRecentJobs = recentJobsWithCounts.map((job) => ({
+    id: job.id,
+
+    title: job.title,
+
+    company: job.company,
+
+    status: job.status,
+
+    createdAt: job.createdAt,
+
+    applicants: Number(job.applicantCount ?? 0),
+  }));
+
+  // ==========================================
+  // ACTIVITY METRICS
+  // ==========================================
+
+  const conversionRate =
+    totalApplications > 0
+      ? Math.round((hiredCount / totalApplications) * 1000) / 10
+      : 0;
+
+  const metrics = {
+    weeklyApplications: weeklyApplicationCount,
+
+    weeklyHires: hiredCount,
+
+    hiredTotal: hiredCount,
+
+    conversionRate,
+  };
+
+  // ==========================================
   // FINAL RECRUITER RESPONSE
   // ==========================================
 
@@ -492,7 +571,11 @@ const getRecruiterDashboardData = async (user) => {
 
     recentApplications: formattedApplications,
 
+    recentJobs: formattedRecentJobs,
+
     activities,
+
+    metrics,
   };
 };
 
@@ -538,4 +621,370 @@ const formatSalaryRange = (min, max) => {
   // ==========================================
 
   return `$${minimum / 1000}k - $${maximum / 1000}k`;
+};
+// ============================================
+// GET ADMIN DASHBOARD
+// ============================================
+
+const getAdminDashboardData = async (user) => {
+  const [
+    adminCount,
+    candidateCount,
+    recruiterCount,
+    pendingRecruiters,
+    rejectedRecruiters,
+    inactiveUsers,
+    totalJobs,
+    openJobs,
+    closedJobs,
+    totalApplications,
+    pendingApplications,
+    shortlistedApplications,
+    interviewApplications,
+    hiredApplications,
+    rejectedApplications,
+    totalInterviews,
+    recentRecruiters,
+    pendingApprovals,
+    activityFeed,
+  ] = await Promise.all([
+    countUsersByRole("admin"),
+    countUsersByRole("candidate"),
+    countUsersByRole("recruiter"),
+    countRecruitersByApprovalStatus("pending"),
+    countRecruitersByApprovalStatus("rejected"),
+    countInactiveUsers(),
+    countAllJobs(),
+    countJobsByStatus("open"),
+    countJobsByStatus("closed"),
+    countAllApplications(),
+    countApplicationsByStatus("pending"),
+    countApplicationsByStatus("shortlisted"),
+    countApplicationsByStatus("interview"),
+    countApplicationsByStatus("hired"),
+    countApplicationsByStatus("rejected"),
+    countAllInterviews(),
+    getRecentRecruitersForAdmin(5),
+    getPendingRecruitersForAdmin(),
+    getAdminActivityFeed(),
+  ]);
+
+  const totals = {
+    totalUsers: adminCount + candidateCount + recruiterCount,
+
+    admins: adminCount,
+
+    candidates: candidateCount,
+
+    recruiters: recruiterCount,
+
+    pendingRecruiters,
+
+    rejectedRecruiters,
+
+    inactiveUsers,
+
+    totalJobs,
+
+    openJobs,
+
+    closedJobs,
+
+    totalApplications,
+
+    applicationsByStatus: {
+      pending: pendingApplications,
+
+      shortlisted: shortlistedApplications,
+
+      interview: interviewApplications,
+
+      hired: hiredApplications,
+
+      rejected: rejectedApplications,
+    },
+
+    totalInterviews,
+  };
+
+  return {
+    user: {
+      id: user.id,
+
+      name: user.fullName,
+
+      email: user.email,
+    },
+
+    totals,
+
+    recentRecruiters,
+
+    pendingApprovals,
+
+    activityFeed,
+  };
+};
+
+// ============================================
+// DATE-RANGE REPORTS (candidate + recruiter)
+// GET /api/dashboard/report?from=YYYY-MM-DD&to=YYYY-MM-DD
+// ============================================
+
+const MAX_REPORT_RANGE_DAYS = 366;
+
+const parseReportRange = (from, to) => {
+  const end = to ? new Date(`${to}T23:59:59.999Z`) : new Date();
+
+  const start = from
+    ? new Date(`${from}T00:00:00.000Z`)
+    : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    const error = new Error("Invalid date range. Use YYYY-MM-DD format.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (start > end) {
+    const error = new Error("From date cannot be after to date.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const days = (end - start) / (24 * 60 * 60 * 1000);
+
+  if (days > MAX_REPORT_RANGE_DAYS) {
+    const error = new Error("Date range cannot exceed 12 months.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return { from: start, to: end };
+};
+
+const countByStatus = (items) => {
+  const byStatus = {};
+
+  for (const item of items) {
+    byStatus[item.status] = (byStatus[item.status] ?? 0) + 1;
+  }
+
+  return byStatus;
+};
+
+export const getReportData = async (userId, { from, to } = {}) => {
+  const user = await findUserById(userId);
+
+  if (!user) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const range = parseReportRange(from, to);
+
+  if (user.role === "candidate") {
+    return getCandidateReportData(user, range);
+  }
+
+  if (user.role === "recruiter") {
+    return getRecruiterReportData(user, range);
+  }
+
+  const error = new Error("Reports are available for candidates and recruiters.");
+  error.statusCode = 403;
+  throw error;
+};
+
+const getCandidateReportData = async (user, { from, to }) => {
+  const applications = await getCandidateApplicationsInRange(
+    user.id,
+    from,
+    to,
+  );
+
+  const byStatus = countByStatus(applications);
+
+  // Accepted = hired or offer received; reviewing = pending or screening
+  const totals = {
+    applied: applications.length,
+    reviewing: (byStatus.pending ?? 0) + (byStatus.screening ?? 0),
+    shortlisted: byStatus.shortlisted ?? 0,
+    interview: byStatus.interview ?? 0,
+    accepted: (byStatus.hired ?? 0) + (byStatus.offer ?? 0),
+    rejected: byStatus.rejected ?? 0,
+  };
+
+  return {
+    role: "candidate",
+    range: { from: from.toISOString(), to: to.toISOString() },
+    totals,
+    byStatus,
+    applications: applications.map((a) => ({
+      id: a.id,
+      jobId: a.jobId,
+      position: a.position,
+      company: a.company,
+      location: a.location,
+      type: a.type,
+      status: a.status,
+      appliedAt: a.appliedAt,
+    })),
+  };
+};
+
+const getRecruiterReportData = async (user, { from, to }) => {
+  const [applications, jobsPosted] = await Promise.all([
+    getRecruiterApplicationsInRange(user.id, from, to),
+    getRecruiterJobsInRange(user.id, from, to),
+  ]);
+
+  const byStatus = countByStatus(applications);
+
+  const totals = {
+    jobsPosted: jobsPosted.length,
+    applications: applications.length,
+    reviewing: (byStatus.pending ?? 0) + (byStatus.screening ?? 0),
+    shortlisted: byStatus.shortlisted ?? 0,
+    interview: byStatus.interview ?? 0,
+    hired: (byStatus.hired ?? 0) + (byStatus.offer ?? 0),
+    rejected: byStatus.rejected ?? 0,
+  };
+
+  // Per-job breakdown from the in-range applications
+  const byJobMap = new Map();
+
+  for (const app of applications) {
+    if (!byJobMap.has(app.jobId)) {
+      byJobMap.set(app.jobId, {
+        jobId: app.jobId,
+        title: app.position,
+        company: app.company,
+        applications: 0,
+        shortlisted: 0,
+        hired: 0,
+        rejected: 0,
+      });
+    }
+
+    const row = byJobMap.get(app.jobId);
+    row.applications += 1;
+    if (app.status === "shortlisted") row.shortlisted += 1;
+    if (app.status === "hired" || app.status === "offer") row.hired += 1;
+    if (app.status === "rejected") row.rejected += 1;
+  }
+
+  return {
+    role: "recruiter",
+    range: { from: from.toISOString(), to: to.toISOString() },
+    totals,
+    byStatus,
+    byJob: [...byJobMap.values()].sort(
+      (a, b) => b.applications - a.applications,
+    ),
+    jobsPosted: jobsPosted.map((j) => ({
+      id: j.id,
+      title: j.title,
+      company: j.company,
+      status: j.status,
+      createdAt: j.createdAt,
+    })),
+    applications: applications.map((a) => ({
+      id: a.id,
+      jobId: a.jobId,
+      candidateName: a.candidateName,
+      candidateEmail: a.candidateEmail,
+      position: a.position,
+      company: a.company,
+      status: a.status,
+      appliedAt: a.appliedAt,
+    })),
+  };
+};
+
+// ============================================
+// ADMIN REPORTS AGGREGATES
+// ============================================
+
+export const getAdminReportsData = async () => {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [
+    newUsers30d,
+    newJobs30d,
+    newApplications30d,
+    applicationsByStatus,
+    jobsOpen,
+    jobsClosed,
+    topJobs,
+  ] = await Promise.all([
+    countNewUsersSince(since),
+
+    countNewJobsSince(since),
+
+    countNewApplicationsSince(since),
+
+    Promise.all([
+      countApplicationsByStatus("pending"),
+
+      countApplicationsByStatus("shortlisted"),
+
+      countApplicationsByStatus("interview"),
+
+      countApplicationsByStatus("hired"),
+
+      countApplicationsByStatus("rejected"),
+    ]).then(
+      ([pending, shortlisted, interview, hired, rejected]) => ({
+        pending,
+
+        shortlisted,
+
+        interview,
+
+        hired,
+
+        rejected,
+      }),
+    ),
+
+    countJobsByStatus("open"),
+
+    countJobsByStatus("closed"),
+
+    getTopJobsByApplications(5),
+  ]);
+
+  return {
+    growth: {
+      last30Days: {
+        newUsers: newUsers30d,
+
+        newJobs: newJobs30d,
+
+        newApplications: newApplications30d,
+      },
+    },
+
+    applicationsByStatus,
+
+    jobsByStatus: {
+      open: jobsOpen,
+
+      closed: jobsClosed,
+    },
+
+    topJobs: topJobs.map((job) => ({
+      id: job.id,
+
+      title: job.title,
+
+      company: job.company,
+
+      status: job.status,
+
+      applicantCount: Number(job.applicantCount ?? 0),
+    })),
+  };
 };

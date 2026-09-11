@@ -30,6 +30,13 @@ const SECTION_ALIASES = {
     "overview",
   ],
 
+  personal: [
+    "personal information",
+    "personal details",
+    "about me",
+    "profile info",
+  ],
+
   experience: [
     "experience",
     "work experience",
@@ -46,13 +53,21 @@ const SECTION_ALIASES = {
     "education",
     "education qualification",
     "education qualifications",
+    "education & leadership",
+    "education and leadership",
     "academic background",
     "academic qualification",
     "academic qualifications",
+    "academic background & leadership",
     "educational qualification",
     "educational qualifications",
     "qualifications",
     "academic history",
+  ],
+
+  declarations: [
+    "declaration",
+    "declarations",
   ],
 
   skills: [
@@ -74,6 +89,8 @@ const SECTION_ALIASES = {
   projects: [
     "projects",
     "project",
+    "featured projects",
+    "featured project",
     "personal projects",
     "academic projects",
     "key projects",
@@ -216,17 +233,25 @@ export const parseResume = async (rawText) => {
   // Experience
   // ----------------------------------------------------
 
-  resume.experience = parseExperience(
+  const parsedExperience = parseExperience(
     sections.experience || [],
   );
+
+  resume.experience = parsedExperience.length
+    ? parsedExperience
+    : parseExperienceFallback(lines);
 
   // ----------------------------------------------------
   // Projects
   // ----------------------------------------------------
 
-  resume.projects = parseProjects(
+  const parsedProjects = parseProjects(
     sections.projects || [],
   );
+
+  resume.projects = parsedProjects.length
+    ? parsedProjects
+    : parseProjectFallback(lines);
 
   // ----------------------------------------------------
   // Certifications
@@ -316,8 +341,6 @@ const splitEmbeddedSectionHeading = (line) => {
     return [];
   }
 
-  // If the entire line is already a section heading,
-  // don't split it further.
   if (detectSectionHeading(cleaned)) {
     return [cleaned];
   }
@@ -329,72 +352,64 @@ const splitEmbeddedSectionHeading = (line) => {
     .filter(Boolean)
     .sort((a, b) => b.length - a.length);
 
-  const escaped = sectionAliases
-    .map(escapeRegex)
-    .join("|");
+  let bestMatch = null;
 
-  /**
-   * Only recognize a heading at:
-   *
-   * - start of line
-   * - after a strong separator
-   *
-   * Examples:
-   *
-   * "Experience: Software Engineer..."
-   * "Experience - Software Engineer..."
-   * "SUMMARY: ..."
-   *
-   * But NOT:
-   *
-   * "Professional Experience across sales..."
-   */
+  for (const alias of sectionAliases) {
+    const normalizedAlias = normalizeHeading(alias);
+    const lower = cleaned.toLowerCase();
+    const aliasLower = normalizedAlias.toLowerCase();
+    const idx = lower.indexOf(aliasLower);
 
-  const regex = new RegExp(
-    `(?:^|[|•▪◦●○➢➤►▸])\\s*(${escaped})(?=\\s*(?::|[-–—]|$))`,
-    "i",
-  );
+    if (idx === -1) continue;
 
-  const match = cleaned.match(regex);
+    const before = cleaned.slice(0, idx);
+    const after = cleaned.slice(idx + alias.length);
+    const hasClearBoundary =
+      idx === 0 ||
+      /[|•▪◦●○➢➤►▸\-–—:]/.test(before.slice(-1)) ||
+      /\s/.test(before.slice(-1));
 
-  if (!match) {
+    const validAfter =
+      !after ||
+      /^\s*[:\-–—|]/.test(after) ||
+      /^\s*$/.test(after);
+
+    if (!hasClearBoundary || !validAfter) {
+      continue;
+    }
+
+    const matchLength = alias.length;
+
+    if (!bestMatch || matchLength > bestMatch.length) {
+      bestMatch = {
+        alias,
+        index: idx,
+        length: matchLength,
+        before,
+        after,
+      };
+    }
+  }
+
+  if (!bestMatch) {
     return [cleaned];
   }
 
-  const heading = cleanLine(match[1]);
-
-  const headingIndex = match.index ?? 0;
-
-  const fullMatch = match[0];
-
-  const separatorOffset =
-    fullMatch.indexOf(match[1]);
-
-  const contentStart =
-    headingIndex +
-    separatorOffset +
-    match[1].length;
-
-  const before = cleanLine(
-    cleaned.slice(0, headingIndex),
-  );
-
-  const after = cleanLine(
-    cleaned.slice(contentStart),
-  )
-      .replace(/^[:\-–—|]\s*/, "")
-      .trim();
-
   const result = [];
+  const before = cleanLine(bestMatch.before);
 
   if (before) {
     result.push(before);
   }
 
-  result.push(heading);
+  result.push(cleanLine(bestMatch.alias));
 
-  if (after) {
-    result.push(after);
+  const trimmedAfter = cleanLine(
+    bestMatch.after.replace(/^[:\-–—|\s]+/, ""),
+  );
+
+  if (trimmedAfter) {
+    result.push(trimmedAfter);
   }
 
   return result;
@@ -578,6 +593,18 @@ const extractName = (lines) => {
     }
 
     if (isSectionHeading(cleaned)) {
+      continue;
+    }
+
+    if (
+      isStrongJobTitle(cleaned)
+    ) {
+      continue;
+    }
+
+    if (
+      /\b(architect|built|designed|developed|implemented|created|worked|managed|led|engineered|migrated|integrated|crafted|optimized|delivered|supported|improved|created|led)\b/i.test(cleaned)
+    ) {
       continue;
     }
 
@@ -918,8 +945,13 @@ const detectSectionHeading = (line) => {
     SECTION_ALIASES,
   )) {
     for (const alias of aliases) {
+      const normalizedAlias = normalizeHeading(alias);
+
       if (
-        cleaned === normalizeHeading(alias)
+        cleaned === normalizedAlias ||
+        cleaned.includes(normalizedAlias) ||
+        normalizedAlias.includes(cleaned) ||
+        cleaned.startsWith(`${normalizedAlias} `)
       ) {
         return section;
       }
@@ -947,11 +979,244 @@ const detectSectionHeading = (line) => {
 
 const normalizeHeading = (line) => {
   return cleanLine(line)
+    .replace(/^#+\s*/, "")
+    .replace(/^[*_~`]+|[*_~`]+$/g, "")
+    .replace(/^[•·▪◦●○➢➤►▸\-–—]+\s*/, "")
     .toLowerCase()
     .replace(/[:|]/g, "")
     .replace(/[._]+$/g, "")
+    .replace(/[&/]/g, " ")
+    .replace(/\b(and|or)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+};
+
+const isExperienceFallbackHeader = (line) => {
+  const cleaned = normalizeHeading(line);
+
+  if (!cleaned) return false;
+
+  return (
+    /^(professional experience|work experience|employment history|experience|career history|employment)$/i.test(
+      cleaned,
+    ) ||
+    /^(experience|work experience|professional experience|employment history)\s+(?:and|&)?\s*.+$/i.test(
+      cleaned,
+    )
+  );
+};
+
+const isProjectFallbackHeader = (line) => {
+  const cleaned = normalizeHeading(line);
+
+  if (!cleaned) return false;
+
+  return /^(featured projects?|projects?|key projects?|selected projects?|personal projects?)$/i.test(
+    cleaned,
+  );
+};
+
+const isPersonalInfoLine = (line) => {
+  const cleaned = cleanLine(line);
+
+  if (!cleaned) return true;
+
+  if (/^https?:\/\//i.test(cleaned)) return true;
+  if (/@/.test(cleaned)) return true;
+  if (/(?:\+?88\s*?)?01[3-9][\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{2}/.test(cleaned)) return true;
+  if (/^(mobile|phone|email|linkedin|github|portfolio|location|address|website)\s*[:\-]?/i.test(cleaned)) return true;
+
+  return false;
+};
+
+const parseExperienceFallback = (lines) => {
+  const entries = [];
+  let current = null;
+
+  const pushCurrent = () => {
+    if (!current) return;
+
+    const description = current.description
+      .map((item) => cleanLine(item))
+      .filter(Boolean)
+      .join(" ");
+
+    if (!current.title && !current.company && !description) {
+      current = null;
+      return;
+    }
+
+    if (current.title || current.company || description) {
+      entries.push({
+        title: cleanLine(current.title || ""),
+        company: cleanLine(current.company || ""),
+        location: cleanLine(current.location || ""),
+        startDate: cleanLine(current.startDate || ""),
+        endDate: cleanLine(current.endDate || ""),
+        description,
+        technologies: [],
+      });
+    }
+
+    current = null;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = cleanLine(lines[i]);
+    if (!rawLine) continue;
+
+    if (isExperienceFallbackHeader(rawLine)) {
+      pushCurrent();
+      current = { title: "", company: "", location: "", startDate: "", endDate: "", description: [] };
+      continue;
+    }
+
+    if (isPersonalInfoLine(rawLine)) {
+      continue;
+    }
+
+    const date = extractDateRange(rawLine);
+
+    if (date && !current) {
+      current = { title: "", company: "", location: "", startDate: date.start, endDate: date.end, description: [] };
+      continue;
+    }
+
+    if (date && current && !current.startDate) {
+      current.startDate = date.start;
+      current.endDate = date.end;
+      continue;
+    }
+
+    if (!current) {
+      if (looksLikeSentence(rawLine) || isBullet(rawLine)) {
+        continue;
+      }
+      current = { title: "", company: "", location: "", startDate: "", endDate: "", description: [] };
+    }
+
+    if (isStrongJobTitle(rawLine) && !current.title) {
+      current.title = removeDuration(rawLine);
+      continue;
+    }
+
+    if (current.title && !current.company && looksLikeCompanyName(rawLine)) {
+      current.company = rawLine;
+      continue;
+    }
+
+    if (!current.company && /\b(solutions|technology|engineering|labs?|group|limited|ltd|digital|studio|consulting|agency|systems|innovations|software)\b/i.test(rawLine)) {
+      current.company = rawLine;
+      continue;
+    }
+
+    if (!current.location && /(dhaka|bangladesh|chattogram|sylhet|rajshahi|khulna|barisal|remote|hybrid)/i.test(rawLine)) {
+      current.location = rawLine;
+      continue;
+    }
+
+    if (isBullet(rawLine)) {
+      current.description.push(removeBullet(rawLine));
+      continue;
+    }
+
+    if (looksLikeExperienceDescription(rawLine) || rawLine.length > 35) {
+      current.description.push(rawLine);
+    }
+  }
+
+  pushCurrent();
+
+  return entries;
+};
+
+const parseProjectFallback = (lines) => {
+  const entries = [];
+  let current = null;
+
+  const pushCurrent = () => {
+    if (!current) return;
+
+    const description = current.description
+      .map((item) => cleanLine(item))
+      .filter(Boolean)
+      .join(" ");
+
+    if (current.name || description) {
+      entries.push({
+        name: cleanLine(current.name || ""),
+        description,
+        technologies: [],
+        url: "",
+      });
+    }
+
+    current = null;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = cleanLine(lines[i]);
+    if (!rawLine) continue;
+
+    if (isProjectFallbackHeader(rawLine)) {
+      pushCurrent();
+      current = { name: "", description: [] };
+      continue;
+    }
+
+    if (isPersonalInfoLine(rawLine)) {
+      continue;
+    }
+
+    if (isLikelyPersonName(rawLine)) {
+      continue;
+    }
+
+    if (isDateOnlyLine(rawLine)) {
+      continue;
+    }
+
+    if (!current) {
+      if (
+        isExperienceFallbackHeader(rawLine) ||
+        isLikelyTitlePart(rawLine) ||
+        isStrongJobTitle(rawLine) ||
+        looksLikeCompanyName(rawLine) ||
+        looksLikeSentence(rawLine) ||
+        looksLikeBusinessServiceLine(rawLine)
+      ) {
+        continue;
+      }
+      current = { name: "", description: [] };
+    }
+
+    if (current.name && isBullet(rawLine)) {
+      current.description.push(removeBullet(rawLine));
+      continue;
+    }
+
+    if (
+      !current.name &&
+      rawLine.length > 2 &&
+      !looksLikeSentence(rawLine) &&
+      !looksLikeCompanyName(rawLine) &&
+      !isLikelyTitlePart(rawLine) &&
+      !isStrongJobTitle(rawLine) &&
+      !looksLikeBusinessServiceLine(rawLine) &&
+      !/(dhaka|bangladesh|uttara| khulna|rajshahi|sylhet|chattogram|cumilla|barisal|remote|hybrid)/i.test(rawLine)
+    ) {
+      current.name = rawLine;
+      continue;
+    }
+
+    if (current.name && rawLine.length > 10) {
+      current.description.push(rawLine);
+    }
+  }
+
+  pushCurrent();
+
+  return entries;
 };
 
 const isSectionHeading = (line) => {
@@ -1680,6 +1945,25 @@ const parseExperience = (
       continue;
     }
 
+    const dateTitleMatch = rawLine.match(
+      /^(.+?)\s+((?:19|20)\d{2})\s*[-–—]\s*(Present|Current|Running|Now)$/i,
+    );
+
+    if (
+      dateTitleMatch &&
+      isLikelyTitlePart(dateTitleMatch[1])
+    ) {
+      if (current?.title) {
+        pushCurrent();
+      }
+
+      current = createExperience();
+      current.title = cleanLine(dateTitleMatch[1]);
+      current.startDate = dateTitleMatch[2];
+      current.endDate = dateTitleMatch[3];
+      continue;
+    }
+
     // --------------------------------------------------
     // JOB TITLE
     // --------------------------------------------------
@@ -1756,7 +2040,6 @@ const parseExperience = (
 
     if (
       current &&
-      current.title &&
       !current.company &&
       looksLikeCompanyName(
         rawLine,
@@ -1774,7 +2057,6 @@ const parseExperience = (
 
     if (
       current &&
-      current.title &&
       !current.company &&
       isSafeCompanyFallback(
         rawLine,
@@ -1937,7 +2219,9 @@ const isSafeCompanyFallback = (
   if (
     isJsonLikeLine(cleaned) ||
     isSectionHeading(cleaned) ||
-    isBullet(cleaned)
+    isBullet(cleaned) ||
+    looksLikeGenericBusinessPhrase(cleaned) ||
+    looksLikeBusinessServiceLine(cleaned)
   ) {
     return false;
   }
@@ -2093,14 +2377,32 @@ const parseCombinedJobLine = (
     const title =
       commaParts[0];
 
-    const company =
-      commaParts
-        .slice(1)
-        .join(", ");
+    const companyParts = commaParts
+      .slice(1)
+      .filter((part) => {
+        const cleaned = cleanLine(part);
+        if (!cleaned) return false;
+
+        if (extractDateRange(cleaned)) {
+          return false;
+        }
+
+        if (
+          /^(dhaka|chattogram|chittagong|cumilla|comilla|sylhet|rajshahi|khulna|barisal|bangladesh|remote|hybrid|on-site)$/i.test(
+            cleaned,
+          )
+        ) {
+          return false;
+        }
+
+        return true;
+      });
+
+    const company = companyParts.join(", ");
 
     if (
       isLikelyTitlePart(title) &&
-      looksLikeCompanyName(company)
+      (looksLikeCompanyName(company) || companyParts.length > 0)
     ) {
       return {
         title,
@@ -2285,6 +2587,17 @@ const isStrongJobTitle = (
     return false;
   }
 
+  if (
+    /^(.+?)\s+((?:19|20)\d{2})\s*[-–—]\s*(Present|Current|Running|Now)$/i.test(cleaned)
+  ) {
+    return isLikelyTitlePart(
+      cleaned.replace(
+        /\s+((?:19|20)\d{2})\s*[-–—]\s*(Present|Current|Running|Now)$/i,
+        "",
+      ),
+    );
+  }
+
   if (cleaned.length > 100) {
     return false;
   }
@@ -2336,7 +2649,9 @@ const looksLikeCompanyName = (
 
   if (
     isSectionHeading(cleaned) ||
-    isBullet(cleaned)
+    isBullet(cleaned) ||
+    looksLikeGenericBusinessPhrase(cleaned) ||
+    looksLikeBusinessServiceLine(cleaned)
   ) {
     return false;
   }
@@ -2548,16 +2863,125 @@ const parseProjects = (
   return entries;
 };
 
+const looksLikeBusinessServiceLine = (
+  line,
+) => {
+  const cleaned = cleanLine(line);
+
+  if (!cleaned) return false;
+
+  return (
+    /(?:^|\s)(?:solutions?|services?|engineering|development|design|marketing|sales|digital|freelance|agency|studio|consulting|software|technology|product|business)\b/i.test(
+      cleaned,
+    ) &&
+    (/[\/|]/.test(cleaned) || /\b(?:at|with|for|and)\b/i.test(cleaned) || /\s+\w+\s*\w*$/i.test(cleaned))
+  );
+};
+
+const looksLikeGenericBusinessPhrase = (
+  line,
+) => {
+  const cleaned = cleanLine(line);
+
+  if (!cleaned) return false;
+
+  return (
+    /^(problem solved|key features|tech stack|professional summary|summary|skills?|experience|work experience|employment history)$/i.test(
+      cleaned,
+    ) ||
+    /^(solutions?|services?|freelance(?:\s+engineering)?|engineering|design|development|marketing|sales|digital|software|technology|product|business)(?:\s*[\/|]\s*|\s+)(?:solutions?|services?|freelance(?:\s+engineering)?|engineering|design|development|marketing|sales|digital|software|technology|product|business|.*)$/i.test(
+      cleaned,
+    ) ||
+    /\b(?:problem solved|key features|tech stack|professional summary|summary|skills?|experience|work experience|employment history)\b/i.test(
+      cleaned,
+    )
+  );
+};
+
 const isLikelyProjectHeading = (
   line,
 ) => {
-  return (
-    line.length >= 2 &&
-    line.length <= 100 &&
-    !/[.!?]$/.test(line) &&
-    !/\d{4}/.test(line) &&
-    !isBullet(line) &&
-    !looksLikeSentence(line)
+  const cleaned = cleanLine(line);
+
+  if (
+    !cleaned ||
+    cleaned.length < 2 ||
+    cleaned.length > 100 ||
+    isBullet(cleaned) ||
+    isLikelyPersonName(cleaned) ||
+    isDateOnlyLine(cleaned) ||
+    looksLikeCompanyName(cleaned) ||
+    isStrongJobTitle(cleaned) ||
+    isLikelyTitlePart(cleaned) ||
+    looksLikeBusinessServiceLine(cleaned)
+  ) {
+    return false;
+  }
+
+  if (/[.!?]$/.test(cleaned)) {
+    return false;
+  }
+
+  if (
+    /[—–-]/.test(cleaned) ||
+    /\b(?:project|platform|portal|system|app|application|website|dashboard|gateway|solution|studio|labs|management|matching|tracker|tool|network|automation|ecommerce|resume|portfolio|scheduler|chatbot|crm|erp)\b/i.test(
+      cleaned,
+    ) ||
+    /\b(?:19|20)\d{2}\b/.test(cleaned)
+  ) {
+    return true;
+  }
+
+  return !looksLikeSentence(cleaned);
+};
+
+const isDateOnlyLine = (line) => {
+  const cleaned = cleanLine(line);
+
+  if (!cleaned) return false;
+
+  const simpleDate = /^(?:19|20)\d{2}$/i.test(cleaned);
+  const dateRange = /^(?:19|20)\d{2}\s*[-–—]\s*(?:19|20)\d{2}|(?:19|20)\d{2}\s*[-–—]\s*(?:Present|Current|Running|Now)$/i.test(cleaned);
+  const standaloneWord = /^(?:Present|Current|Running|Now)$/i.test(cleaned);
+
+  return simpleDate || dateRange || standaloneWord;
+};
+
+const isLikelyPersonName = (
+  line,
+) => {
+  const cleaned = cleanLine(line);
+
+  if (
+    !cleaned ||
+    cleaned.length < 3 ||
+    cleaned.length > 80
+  ) {
+    return false;
+  }
+
+  if (
+    isSectionHeading(cleaned) ||
+    isBullet(cleaned) ||
+    isJsonLikeLine(cleaned) ||
+    /@|https?:\/\//i.test(cleaned) ||
+    /\d/.test(cleaned) ||
+    /[\/|]/.test(cleaned)
+  ) {
+    return false;
+  }
+
+  const words = cleaned.split(/\s+/);
+
+  if (
+    words.length < 2 ||
+    words.length > 6
+  ) {
+    return false;
+  }
+
+  return words.every((word) =>
+    /^[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÿ.'’-]*$/.test(word),
   );
 };
 
@@ -3245,10 +3669,41 @@ const removeBullet = (line) => {
 const looksLikeSentence = (
   line,
 ) => {
-  return (
-    /[.!?]$/.test(line) ||
-    line.split(/\s+/).length > 14
-  );
+  const cleaned = cleanLine(line);
+
+  if (!cleaned) return true;
+
+  if (isSectionHeading(cleaned)) {
+    return false;
+  }
+
+  if (/[.!?]$/.test(cleaned)) {
+    return true;
+  }
+
+  if (
+    /[—–-]/.test(cleaned) ||
+    /\b(?:project|platform|portal|system|app|application|website|dashboard|gateway|solution|studio|labs|management|matching|tracker|tool|network|automation|career objective|personal information|summary|skills|education|experience)\b/i.test(
+      cleaned,
+    )
+  ) {
+    return false;
+  }
+
+  const titleSignals =
+    /\b(developer|engineer|designer|manager|analyst|intern|consultant|specialist|assistant|lead|director|coordinator|researcher|teacher|lecturer|professor|accountant|marketing|sales|product|frontend|backend|full[- ]stack|software|data)\b/i.test(
+      cleaned,
+    );
+
+  const dateSignals =
+    /\b(?:19|20)\d{2}\b/.test(cleaned) ||
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(cleaned);
+
+  if (titleSignals || dateSignals) {
+    return false;
+  }
+
+  return cleaned.split(/\s+/).length > 14;
 };
 
 // ======================================================

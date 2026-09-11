@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "seed:jobs": "node src/db/seed-jobs.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
@@ -20,11 +21,13 @@
     "fastify-plugin": "^6.0.0",
     "mammoth": "^1.12.1",
     "onnxruntime-node": "^1.27.0",
+    "openai": "^7.9.0",
     "pdf-parse": "^2.4.5",
     "pdf-to-img": "^6.2.0",
     "pdfjs-dist": "^5.4.296",
     "postgres": "^3.4.9",
-    "ppu-paddle-ocr": "^6.4.0"
+    "ppu-paddle-ocr": "^6.4.0",
+    "stripe": "^22.6.2"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.10",

@@ -2,6 +2,7 @@ export const createCandidateProfileSchema = {
   body: {
     type: "object",
     properties: {
+      fullName: { type: "string", maxLength: 255 },
       phone: { type: "string", maxLength: 50 },
       location: { type: "string", maxLength: 255 },
       headline: { type: "string", maxLength: 255 },

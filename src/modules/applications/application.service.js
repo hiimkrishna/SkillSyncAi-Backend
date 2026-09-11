@@ -1,10 +1,96 @@
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
 
 import { applications } from "../../db/schema/applications.js";
 import { jobs } from "../../db/schema/jobs.js";
 import { users } from "../../db/schema/users.js";
+import { candidateProfiles } from "../../db/schema/candidate-profiles.js";
+import { resumes } from "../../db/schema/resumes.js";
+
+// ============================================
+// ATTACH CANDIDATE PROFILE + RESUME
+// (for recruiter review screens)
+// ============================================
+
+const attachCandidateDetails = async (rows) => {
+  if (!rows.length) {
+    return rows;
+  }
+
+  const candidateIds = [
+    ...new Set(rows.map((row) => row.candidateId)),
+  ];
+
+  const profiles = await db
+    .select({
+      userId: candidateProfiles.userId,
+
+      phone: candidateProfiles.phone,
+
+      location: candidateProfiles.location,
+
+      headline: candidateProfiles.headline,
+
+      bio: candidateProfiles.bio,
+
+      skills: candidateProfiles.skills,
+
+      experience: candidateProfiles.experience,
+
+      education: candidateProfiles.education,
+
+      certifications: candidateProfiles.certifications,
+    })
+    .from(candidateProfiles)
+    .where(inArray(candidateProfiles.userId, candidateIds));
+
+  const profileMap = new Map(
+    profiles.map((profile) => [profile.userId, profile]),
+  );
+
+  const resumeRows = await db
+    .select({
+      id: resumes.id,
+
+      candidateId: resumes.candidateId,
+
+      fileName: resumes.fileName,
+
+      fileUrl: resumes.fileUrl,
+
+      createdAt: resumes.createdAt,
+    })
+    .from(resumes)
+    .where(inArray(resumes.candidateId, candidateIds))
+    .orderBy(desc(resumes.createdAt));
+
+  const resumeMap = new Map();
+
+  for (const resume of resumeRows) {
+    if (!resumeMap.has(resume.candidateId)) {
+      resumeMap.set(resume.candidateId, {
+        fileName: resume.fileName,
+
+        url: resume.fileUrl,
+
+        uploadedAt: resume.createdAt,
+      });
+    }
+  }
+
+  return rows.map((row) => ({
+    ...row,
+
+    candidate: {
+      ...(row.candidate ?? {}),
+
+      ...(profileMap.get(row.candidateId) ?? {}),
+    },
+
+    resume: resumeMap.get(row.candidateId) ?? null,
+  }));
+};
 
 // ============================================
 // APPLY TO JOB
@@ -43,15 +129,26 @@ export const applyToJob = async (candidateId, jobId) => {
       location: jobs.location,
       type: jobs.type,
       status: jobs.status,
+      applicationDeadline: jobs.applicationDeadline,
     })
     .from(jobs)
-    .where(eq(jobs.id, jobId))
+    .where(and(eq(jobs.id, jobId), isNull(jobs.deletedAt)))
     .limit(1);
 
   if (!job) {
     const error = new Error("Job not found");
     error.statusCode = 404;
     throw error;
+  }
+
+  // Auto-off: deadline passed → treat as closed
+  if (job.applicationDeadline) {
+    const deadlineMs = new Date(job.applicationDeadline).getTime();
+    if (!Number.isNaN(deadlineMs) && deadlineMs < Date.now()) {
+      const error = new Error("Application deadline has passed");
+      error.statusCode = 410;
+      throw error;
+    }
   }
 
   if (job.status !== "open") {
@@ -69,6 +166,7 @@ export const applyToJob = async (candidateId, jobId) => {
       and(
         eq(applications.candidateId, candidateId),
         eq(applications.jobId, jobId),
+        isNull(applications.deletedAt),
       ),
     )
     .limit(1);
@@ -158,6 +256,12 @@ export const getMyApplications = async (candidateId) => {
 
       offerDetails: applications.offerDetails,
 
+      aiEvaluation: applications.aiEvaluation,
+
+      aiEvaluatedAt: applications.aiEvaluatedAt,
+
+      interviewQuestions: applications.interviewQuestions,
+
       createdAt: applications.createdAt,
 
       updatedAt: applications.updatedAt,
@@ -171,11 +275,18 @@ export const getMyApplications = async (candidateId) => {
         status: jobs.status,
         salaryMin: jobs.salaryMin,
         salaryMax: jobs.salaryMax,
+        applicationDeadline: jobs.applicationDeadline,
       },
     })
     .from(applications)
     .innerJoin(jobs, eq(applications.jobId, jobs.id))
-    .where(eq(applications.candidateId, candidateId))
+    .where(
+      and(
+        eq(applications.candidateId, candidateId),
+        isNull(applications.deletedAt),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .orderBy(desc(applications.createdAt));
 
   return results.map((application) => ({
@@ -235,6 +346,12 @@ export const getRecruiterApplications = async (recruiterId) => {
 
       offerDetails: applications.offerDetails,
 
+      aiEvaluation: applications.aiEvaluation,
+
+      aiEvaluatedAt: applications.aiEvaluatedAt,
+
+      interviewQuestions: applications.interviewQuestions,
+
       createdAt: applications.createdAt,
 
       updatedAt: applications.updatedAt,
@@ -249,6 +366,7 @@ export const getRecruiterApplications = async (recruiterId) => {
         status: jobs.status,
         salaryMin: jobs.salaryMin,
         salaryMax: jobs.salaryMax,
+        applicationDeadline: jobs.applicationDeadline,
       },
 
       candidate: {
@@ -260,10 +378,17 @@ export const getRecruiterApplications = async (recruiterId) => {
     .from(applications)
     .innerJoin(jobs, eq(applications.jobId, jobs.id))
     .innerJoin(users, eq(applications.candidateId, users.id))
-    .where(eq(jobs.recruiterId, recruiterId))
+    .where(
+      and(
+        eq(jobs.recruiterId, recruiterId),
+        isNull(applications.deletedAt),
+        isNull(jobs.deletedAt),
+        isNull(users.deletedAt),
+      ),
+    )
     .orderBy(desc(applications.createdAt));
 
-  return results.map((application) => ({
+  const enriched = results.map((application) => ({
     ...application,
 
     candidateName: application.candidate?.fullName || "",
@@ -274,6 +399,8 @@ export const getRecruiterApplications = async (recruiterId) => {
 
     companyName: application.job?.company || "",
   }));
+
+  return attachCandidateDetails(enriched);
 };
 
 // ============================================
@@ -300,6 +427,12 @@ export const getApplicationById = async (applicationId, userId, userRole) => {
 
       offerDetails: applications.offerDetails,
 
+      aiEvaluation: applications.aiEvaluation,
+
+      aiEvaluatedAt: applications.aiEvaluatedAt,
+
+      interviewQuestions: applications.interviewQuestions,
+
       createdAt: applications.createdAt,
 
       updatedAt: applications.updatedAt,
@@ -314,6 +447,7 @@ export const getApplicationById = async (applicationId, userId, userRole) => {
         status: jobs.status,
         salaryMin: jobs.salaryMin,
         salaryMax: jobs.salaryMax,
+        applicationDeadline: jobs.applicationDeadline,
       },
 
       candidate: {
@@ -325,7 +459,13 @@ export const getApplicationById = async (applicationId, userId, userRole) => {
     .from(applications)
     .innerJoin(jobs, eq(applications.jobId, jobs.id))
     .innerJoin(users, eq(applications.candidateId, users.id))
-    .where(eq(applications.id, applicationId))
+    .where(
+      and(
+        eq(applications.id, applicationId),
+        isNull(applications.deletedAt),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .limit(1);
 
   if (!application) {
@@ -344,17 +484,23 @@ export const getApplicationById = async (applicationId, userId, userRole) => {
     }
   }
 
-  return {
-    ...application,
+  const enriched = [
+    {
+      ...application,
 
-    candidateName: application.candidate?.fullName || "",
+      candidateName: application.candidate?.fullName || "",
 
-    candidateEmail: application.candidate?.email || "",
+      candidateEmail: application.candidate?.email || "",
 
-    jobTitle: application.job?.title || "",
+      jobTitle: application.job?.title || "",
 
-    companyName: application.job?.company || "",
-  };
+      companyName: application.job?.company || "",
+    },
+  ];
+
+  const [result] = await attachCandidateDetails(enriched);
+
+  return result;
 };
 
 // ============================================

@@ -6,6 +6,7 @@ import {
   rejectRecruiter,
   updateRecruiter,
   suspendRecruiter,
+  unsuspendRecruiter,
   deleteRecruiter,
 } from "./admin.service.js";
 
@@ -28,7 +29,18 @@ const handleError = (error, request, reply) => {
 // ============================================
 export const getAllUsersController = async (request, reply) => {
   try {
-    const users = await getAllUsers();
+    const allowedRoles = ["candidate", "recruiter", "admin"];
+
+    let role = request.query?.role;
+
+    if (role !== undefined && !allowedRoles.includes(role)) {
+      return reply.code(400).send({
+        message: "Invalid role filter",
+      });
+    }
+
+    const users = await getAllUsers({ role });
+
     return reply.code(200).send({ users });
   } catch (error) {
     return handleError(error, request, reply);
@@ -133,6 +145,21 @@ export const deleteRecruiterController = async (request, reply) => {
     const recruiter = await deleteRecruiter(id);
     return reply.code(200).send({
       message: "Recruiter deleted successfully",
+      recruiter,
+    });
+  } catch (error) {
+    return handleError(error, request, reply);
+  }
+};
+// ============================================
+// UNSUSPEND RECRUITER
+// ============================================
+export const unsuspendRecruiterController = async (request, reply) => {
+  try {
+    const { id } = request.params;
+    const recruiter = await unsuspendRecruiter(id);
+    return reply.code(200).send({
+      message: "Recruiter unsuspended successfully",
       recruiter,
     });
   } catch (error) {

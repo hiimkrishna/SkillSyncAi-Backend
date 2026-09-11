@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
 
@@ -67,6 +67,7 @@ export const getInterviewsByRecruiter = async (recruiterId) => {
         id: jobs.id,
         title: jobs.title,
         company: jobs.company,
+        applicationDeadline: jobs.applicationDeadline,
       },
 
       // ========================================
@@ -89,8 +90,14 @@ export const getInterviewsByRecruiter = async (recruiterId) => {
     // Interview → Application
     .innerJoin(applications, eq(interviews.applicationId, applications.id))
 
-    // Only this recruiter's interviews
-    .where(eq(interviews.recruiterId, recruiterId))
+    // Only this recruiter's interviews (exclude soft-deleted)
+    .where(
+      and(
+        eq(interviews.recruiterId, recruiterId),
+        isNull(interviews.deletedAt),
+        isNull(jobs.deletedAt),
+      ),
+    )
 
     .orderBy(desc(interviews.scheduledAt));
 };

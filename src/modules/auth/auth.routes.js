@@ -2,12 +2,14 @@ import {
   register,
   login,
   changePassword,
+  verifyLogin2fa,
 } from "./auth.controller.js";
 
 import {
   registerSchema,
   loginSchema,
   changePasswordSchema,
+  verifyLogin2faSchema,
 } from "./auth.schemas.js";
 
 export default async function authRoutes(app) {
@@ -30,6 +32,12 @@ export default async function authRoutes(app) {
       schema: changePasswordSchema,
     },
     changePassword
+  );
+
+  app.post(
+    "/2fa/verify",
+    { schema: verifyLogin2faSchema },
+    verifyLogin2fa
   );
 
   app.get(

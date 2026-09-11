@@ -2,6 +2,7 @@ import {
   registerUser,
   loginUser,
   changePasswordUser,
+  verifyTwoFactorLogin,
 } from "./auth.service.js";
 
 export const register = async (request, reply) => {
@@ -9,10 +10,10 @@ export const register = async (request, reply) => {
     const user = await registerUser(request.body);
 
 
-return reply.code(201).send({
-  message: "Registration successful",
-  user,
-});
+    return reply.code(201).send({
+      message: "Registration successful",
+      user,
+    });
 
 
   } catch (error) {
@@ -22,17 +23,17 @@ return reply.code(201).send({
       });
     }
 
-if (error.message === "Admin registration is not allowed") {
-  return reply.code(403).send({
-    message: error.message,
-  });
-}
+    if (error.message === "Admin registration is not allowed") {
+      return reply.code(403).send({
+        message: error.message,
+      });
+    }
 
-request.log.error(error);
+    request.log.error(error);
 
-return reply.code(500).send({
-  message: "Internal server error",
-});
+    return reply.code(500).send({
+      message: "Internal server error",
+    });
 
   }
 };
@@ -44,10 +45,17 @@ export const login = async (request, reply) => {
       request.body
     );
 
-return reply.code(200).send({
-  message: "Login successful",
-  ...result,
-});
+    if (result.twoFactorRequired) {
+      return reply.code(200).send({
+        message: "Phone verification required",
+        ...result,
+      });
+    }
+
+    return reply.code(200).send({
+      message: "Login successful",
+      ...result,
+    });
 
   } catch (error) {
     if (
@@ -59,26 +67,35 @@ return reply.code(200).send({
       });
     }
 
-if (
-  error.message ===
-  "Your account is waiting for admin approval"
-) {
-  return reply.code(403).send({
-    message: error.message,
-  });
-}
+    if (
+      error.message ===
+      "Two-factor is enabled but no phone number is saved. Update your account settings."
+    ) {
+      return reply.code(400).send({
+        message: error.message,
+      });
+    }
 
-if (error.message === "Your account has been rejected") {
-  return reply.code(403).send({
-    message: error.message,
-  });
-}
+    if (
+      error.message ===
+      "Your account is waiting for admin approval"
+    ) {
+      return reply.code(403).send({
+        message: error.message,
+      });
+    }
 
-request.log.error(error);
+    if (error.message === "Your account has been rejected") {
+      return reply.code(403).send({
+        message: error.message,
+      });
+    }
 
-return reply.code(500).send({
-  message: "Internal server error",
-});
+    request.log.error(error);
+
+    return reply.code(500).send({
+      message: "Internal server error",
+    });
   }
 };
 
@@ -86,15 +103,15 @@ export const changePassword = async (request, reply) => {
   try {
     const userId = request.user.userId;
 
-const result = await changePasswordUser(
-  userId,
-  request.body
-);
+    const result = await changePasswordUser(
+      userId,
+      request.body
+    );
 
-return reply.code(200).send({
-  message: "Password changed successfully",
-  ...result,
-});
+    return reply.code(200).send({
+      message: "Password changed successfully",
+      ...result,
+    });
 
   } catch (error) {
     if (
@@ -107,23 +124,72 @@ return reply.code(200).send({
       });
     }
 
-if (error.message === "User not found") {
-  return reply.code(404).send({
-    message: error.message,
-  });
-}
+    if (error.message === "User not found") {
+      return reply.code(404).send({
+        message: error.message,
+      });
+    }
 
-if (error.message === "Account is inactive") {
-  return reply.code(401).send({
-    message: error.message,
-  });
-}
+    if (error.message === "Account is inactive") {
+      return reply.code(401).send({
+        message: error.message,
+      });
+    }
 
-request.log.error(error);
+    request.log.error(error);
 
-return reply.code(500).send({
-  message: "Internal server error",
-});
+    return reply.code(500).send({
+      message: "Internal server error",
+    });
 
+  }
+};
+
+export const verifyLogin2fa = async (request, reply) => {
+  try {
+    const result = await verifyTwoFactorLogin(
+      request.server,
+      request.body
+    );
+
+    return reply.code(200).send({
+      message: "Login successful",
+      ...result,
+    });
+  } catch (error) {
+    if (
+      error.message?.includes("verification session has expired") ||
+      error.message === "Invalid email or password" ||
+      error.message === "Account is inactive"
+    ) {
+      return reply.code(401).send({
+        message: error.message,
+      });
+    }
+
+    if (
+      error.message === "Your account is waiting for admin approval" ||
+      error.message === "Your account has been rejected"
+    ) {
+      return reply.code(403).send({
+        message: error.message,
+      });
+    }
+
+    if (
+      error.message === "No verification code was requested" ||
+      error.message?.includes("expired") ||
+      error.message?.startsWith("Incorrect verification code")
+    ) {
+      return reply.code(400).send({
+        message: error.message,
+      });
+    }
+
+    request.log.error(error);
+
+    return reply.code(500).send({
+      message: "Internal server error",
+    });
   }
 };

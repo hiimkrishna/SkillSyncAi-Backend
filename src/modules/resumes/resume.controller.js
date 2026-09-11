@@ -100,21 +100,29 @@ export const createResumeController = async (request, reply) => {
         fileUrl: resume.fileUrl,
         parseStatus: resume.parseStatus,
         parserVersion: resume.parserVersion,
+        resumeData: resume.resumeData || {},
 
-        // User-facing useful information only
         summary:
           resume.resumeData?.summary || "",
 
         candidateName:
+          resume.resumeData?.personal?.name ||
           resume.resumeData?.personalInfo?.name ||
           "",
 
         email:
+          resume.resumeData?.personal?.email ||
           resume.resumeData?.personalInfo?.email ||
           "",
 
         phone:
+          resume.resumeData?.personal?.phone ||
           resume.resumeData?.personalInfo?.phone ||
+          "",
+
+        location:
+          resume.resumeData?.personal?.location ||
+          resume.resumeData?.personalInfo?.location ||
           "",
 
         skills:
@@ -178,20 +186,29 @@ export const getResumeController = async (request, reply) => {
         fileUrl: resume.fileUrl,
         parseStatus: resume.parseStatus,
         parserVersion: resume.parserVersion,
+        resumeData: resume.resumeData || {},
 
         summary:
           resume.resumeData?.summary || "",
 
         candidateName:
+          resume.resumeData?.personal?.name ||
           resume.resumeData?.personalInfo?.name ||
           "",
 
         email:
+          resume.resumeData?.personal?.email ||
           resume.resumeData?.personalInfo?.email ||
           "",
 
         phone:
+          resume.resumeData?.personal?.phone ||
           resume.resumeData?.personalInfo?.phone ||
+          "",
+
+        location:
+          resume.resumeData?.personal?.location ||
+          resume.resumeData?.personalInfo?.location ||
           "",
 
         skills:

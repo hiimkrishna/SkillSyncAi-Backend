@@ -1,9 +1,17 @@
 import bcrypt from "bcrypt";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
 import { users } from "../../db/schema/users.js";
 import { recruiterProfiles } from "../../db/schema/recruiter-profiles.js";
+import { candidateProfiles } from "../../db/schema/candidate-profiles.js";
+import { candidateSettings } from "../../db/schema/candidate-settings.js";
+
+import {
+  buildOtpResponse,
+  issueOtpForUser,
+  verifyOtpForUser,
+} from "../../utils/otp.js";
 
 // Allowed public roles to prevent arbitrary role injection
 const ALLOWED_PUBLIC_ROLES = ["candidate", "recruiter"];
@@ -68,6 +76,13 @@ export const registerUser = async ({
         });
       }
 
+      // 6b. Create candidate profile if applicable
+      if (role === "candidate") {
+        await tx.insert(candidateProfiles).values({
+          userId: user.id,
+        });
+      }
+
       return user;
     });
   } catch (error) {
@@ -87,15 +102,19 @@ export const loginUser = async (fastify, { email, password }) => {
     throw new Error("Invalid email or password");
   }
 
-  // 2. Find user
+  // 2. Find user (exclude soft-deleted)
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.email, normalizedEmail))
+    .where(and(eq(users.email, normalizedEmail), isNull(users.deletedAt)))
     .limit(1);
 
   if (!user) {
     throw new Error("Invalid email or password");
+  }
+
+  if (user.deletedAt) {
+    throw new Error("Account has been deleted");
   }
 
   // 3. Compare password before revealing account state to mitigate enumeration
@@ -118,7 +137,54 @@ export const loginUser = async (fastify, { email, password }) => {
     throw new Error("Your account has been rejected");
   }
 
-  // 5. Generate JWT
+  // 5. Two-factor gate: verify phone ownership before issuing a token
+  const [userSettings] = await db
+    .select()
+    .from(candidateSettings)
+    .where(
+      and(
+        eq(candidateSettings.userId, user.id),
+        isNull(candidateSettings.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (userSettings?.security?.twoFactor === true) {
+    let phone = null;
+
+    if (user.role === "recruiter") {
+      const [profile] = await db
+        .select({ phone: recruiterProfiles.phone })
+        .from(recruiterProfiles)
+        .where(eq(recruiterProfiles.userId, user.id))
+        .limit(1);
+
+      phone = profile?.phone ?? null;
+    }
+
+    if (!phone) {
+      throw new Error(
+        "Two-factor is enabled but no phone number is saved. Update your account settings."
+      );
+    }
+
+    const code = await issueOtpForUser(user.id, phone);
+
+    const ticket = fastify.jwt.sign(
+      { userId: user.id, purpose: "2fa" },
+      { expiresIn: "5m" }
+    );
+
+    const payload = buildOtpResponse(code, phone);
+
+    return {
+      twoFactorRequired: true,
+      ticket,
+      ...payload,
+    };
+  }
+
+  // 6. Generate JWT
   const token = fastify.jwt.sign({
     userId: user.id,
     role: user.role,
@@ -126,6 +192,72 @@ export const loginUser = async (fastify, { email, password }) => {
   });
 
   // 6. Return safe payload
+  return {
+    token,
+    user: {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      approvalStatus: user.approvalStatus,
+    },
+  };
+};
+
+export const verifyTwoFactorLogin = async (
+  fastify,
+  { ticket, code }
+) => {
+  let payload;
+
+  try {
+    payload = fastify.jwt.verify(ticket);
+  } catch {
+    throw new Error(
+      "Your verification session has expired. Please log in again."
+    );
+  }
+
+  if (!payload || payload.purpose !== "2fa" || !payload.userId) {
+    throw new Error(
+      "Your verification session has expired. Please log in again."
+    );
+  }
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.id, payload.userId), isNull(users.deletedAt)))
+    .limit(1);
+
+  if (!user) {
+    throw new Error("Invalid email or password");
+  }
+
+  if (user.deletedAt) {
+    throw new Error("Account has been deleted");
+  }
+
+  if (!user.isActive) {
+    throw new Error("Account is inactive");
+  }
+
+  if (user.approvalStatus === "pending") {
+    throw new Error("Your account is waiting for admin approval");
+  }
+
+  if (user.approvalStatus === "rejected") {
+    throw new Error("Your account has been rejected");
+  }
+
+  await verifyOtpForUser(user.id, code);
+
+  const token = fastify.jwt.sign({
+    userId: user.id,
+    role: user.role,
+    approvalStatus: user.approvalStatus,
+  });
+
   return {
     token,
     user: {
@@ -153,9 +285,10 @@ export const changePasswordUser = async (
       id: users.id,
       password: users.password,
       isActive: users.isActive,
+      deletedAt: users.deletedAt,
     })
     .from(users)
-    .where(eq(users.id, userId))
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)))
     .limit(1);
 
   if (!user) {

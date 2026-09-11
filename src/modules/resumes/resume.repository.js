@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
 import { resumes } from "../../db/schema/resumes.js";
@@ -28,7 +28,7 @@ export const getResumesByCandidateId = async (candidateId) => {
   return db
     .select()
     .from(resumes)
-    .where(eq(resumes.candidateId, candidateId))
+    .where(and(eq(resumes.candidateId, candidateId), isNull(resumes.deletedAt)))
     .orderBy(desc(resumes.createdAt));
 };
 
@@ -46,8 +46,9 @@ export const getResumeByIdAndCandidateId = async ({
     .where(
       and(
         eq(resumes.id, resumeId),
-        eq(resumes.candidateId, candidateId)
-      )
+        eq(resumes.candidateId, candidateId),
+        isNull(resumes.deletedAt),
+      ),
     )
     .limit(1);
 
@@ -90,7 +91,7 @@ export const insertResume = async ({
 };
 
 // ============================================
-// DELETE RESUME
+// DELETE RESUME (soft)
 // ============================================
 
 export const deleteResumeByIdAndCandidateId = async ({
@@ -98,12 +99,16 @@ export const deleteResumeByIdAndCandidateId = async ({
   candidateId,
 }) => {
   const result = await db
-    .delete(resumes)
+    .update(resumes)
+    .set({
+      deletedAt: new Date(),
+    })
     .where(
       and(
         eq(resumes.id, resumeId),
-        eq(resumes.candidateId, candidateId)
-      )
+        eq(resumes.candidateId, candidateId),
+        isNull(resumes.deletedAt),
+      ),
     )
     .returning({
       id: resumes.id,

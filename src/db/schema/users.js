@@ -50,6 +50,30 @@ export const users = pgTable("users", {
     .default(true)
     .notNull(),
 
+  stripeCustomerId: varchar("stripe_customer_id", {
+    length: 255,
+  }),
+
+  stripeSubscriptionId: varchar("stripe_subscription_id", {
+    length: 255,
+  }),
+
+  subscriptionPlan: varchar("subscription_plan", {
+    length: 32,
+  }),
+
+  subscriptionStatus: varchar("subscription_status", {
+    length: 32,
+  }),
+
+  subscriptionPeriodEnd: timestamp("subscription_period_end", {
+    withTimezone: true,
+  }),
+
+  deletedAt: timestamp("deleted_at", {
+    withTimezone: true,
+  }),
+
   createdAt: timestamp("created_at", {
     withTimezone: true,
   })

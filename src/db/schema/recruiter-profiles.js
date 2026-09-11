@@ -24,11 +24,19 @@ export const recruiterProfiles = pgTable("recruiter_profiles", {
     length: 255,
   }),
 
+  companyName: varchar("company_name", {
+    length: 255,
+  }),
+
   phone: varchar("phone", {
     length: 50,
   }),
 
   bio: text("bio"),
+
+  deletedAt: timestamp("deleted_at", {
+    withTimezone: true,
+  }),
 
   createdAt: timestamp("created_at", {
     withTimezone: true,

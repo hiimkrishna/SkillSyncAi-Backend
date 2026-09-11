@@ -1,11 +1,7 @@
 // src/modules/resumes/ai/parsing/resume.ai.parser.js
 
-import OpenAI from "openai";
 import { createEmptyResume } from "../../parsing/resume.schema.js";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { callAIJSON } from "../../../ai/ai.client.js";
 
 export const parseResumeWithAI = async (rawText) => {
   if (!rawText || !rawText.trim()) {
@@ -14,18 +10,7 @@ export const parseResumeWithAI = async (rawText) => {
 
   const emptyResume = createEmptyResume();
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-5-mini",
-    temperature: 0,
-
-    response_format: {
-      type: "json_object",
-    },
-
-    messages: [
-      {
-        role: "system",
-        content: `
+  const system = `
 You are an expert resume information extraction system.
 
 Your job is to extract structured information from resumes
@@ -49,11 +34,9 @@ Rules:
 Canonical schema:
 
 ${JSON.stringify(emptyResume)}
-        `,
-      },
-      {
-        role: "user",
-        content: `
+  `;
+
+  const user = `
 Extract structured information from this resume:
 
 --- RESUME START ---
@@ -61,25 +44,7 @@ Extract structured information from this resume:
 ${rawText}
 
 --- RESUME END ---
-        `,
-      },
-    ],
-  });
+  `;
 
-  const content =
-    response.choices?.[0]?.message?.content;
-
-  if (!content) {
-    throw new Error(
-      "AI resume parser returned empty response"
-    );
-  }
-
-  try {
-    return JSON.parse(content);
-  } catch {
-    throw new Error(
-      "AI resume parser returned invalid JSON"
-    );
-  }
+  return await callAIJSON({ system, user, temperature: 0 });
 };

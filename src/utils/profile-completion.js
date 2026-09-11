@@ -38,6 +38,11 @@ export const calculateProfileCompletion = (
       completed: hasItems(profile?.experience),
     },
     {
+      id: "certifications",
+      label: "Add certifications",
+      completed: hasItems(profile?.certifications),
+    },
+    {
       id: "portfolio",
       label: "Add portfolio",
       completed: hasItems(profile?.portfolio),
@@ -56,10 +61,10 @@ export const calculateProfileCompletion = (
     totalItems === 0
       ? 0
       : Math.round(
-          (completedItems /
-            totalItems) *
-            100
-        );
+        (completedItems /
+          totalItems) *
+        100
+      );
 
   return {
     score,

@@ -77,6 +77,26 @@ export const applications = pgTable(
     offerDetails: jsonb("offer_details"),
 
     // ============================================
+    // AI EVALUATION (CLAUDE §17)
+    // ============================================
+
+    aiEvaluation: jsonb("ai_evaluation"),
+
+    aiEvaluatedAt: timestamp("ai_evaluated_at", {
+      withTimezone: true,
+    }),
+
+    aiEvaluationVersion: varchar("ai_evaluation_version", {
+      length: 20,
+    }),
+
+    interviewQuestions: jsonb("interview_questions"),
+
+    deletedAt: timestamp("deleted_at", {
+      withTimezone: true,
+    }),
+
+    // ============================================
     // TIMESTAMPS
     // ============================================
 

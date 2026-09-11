@@ -88,6 +88,10 @@ export const interviews = pgTable("interviews", {
   // Recruiter's notes
   notes: text("notes"),
 
+  deletedAt: timestamp("deleted_at", {
+    withTimezone: true,
+  }),
+
   // Timestamps
   createdAt: timestamp("created_at", {
     withTimezone: true,

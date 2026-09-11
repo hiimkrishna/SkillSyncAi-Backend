@@ -2,6 +2,7 @@ import {
   pgTable,
   uuid,
   jsonb,
+  varchar,
   timestamp,
 } from "drizzle-orm/pg-core";
 
@@ -50,9 +51,25 @@ connectedAccounts: jsonb("connected_accounts")
   .notNull()
   .default([]),
 
-createdAt: timestamp("created_at", {
+otpCodeHash: varchar("otp_code_hash", {
+  length: 255,
+}),
+
+otpExpiresAt: timestamp("otp_expires_at", {
   withTimezone: true,
-})
+}),
+
+otpPhone: varchar("otp_phone", {
+  length: 50,
+}),
+
+deletedAt: timestamp("deleted_at", {
+    withTimezone: true,
+  }),
+
+createdAt: timestamp("created_at", {
+    withTimezone: true,
+  })
   .defaultNow()
   .notNull(),
 

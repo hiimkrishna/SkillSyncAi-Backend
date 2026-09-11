@@ -27,6 +27,23 @@ export const applyToJobController = async (request, reply) => {
 
     const application = await applyToJob(candidateId, jobId);
 
+    // Auto-generate AI glance summary (resume parsed data → job fit) in background
+    // Do not block candidate response — recruiter will see it when opening applicant profile
+    // Use fire-and-forget without touching `request` after reply (request may be destroyed)
+    const appIdForAI = application.id;
+    setImmediate(() => {
+      import("../ai/ai.service.js")
+        .then(({ autoGenerateEvaluationForApplication }) =>
+          autoGenerateEvaluationForApplication(appIdForAI),
+        )
+        .then(() => {
+          console.log(`[AI] auto-evaluation completed for ${appIdForAI}`);
+        })
+        .catch((e) => {
+          console.error(`[AI] auto-evaluation failed for ${appIdForAI}:`, e.message);
+        });
+    });
+
     return reply.code(201).send({
       success: true,
       message: "Application submitted successfully",

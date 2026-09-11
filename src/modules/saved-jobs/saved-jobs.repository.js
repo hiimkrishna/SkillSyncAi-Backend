@@ -3,6 +3,7 @@ import {
   and,
   count,
   desc,
+  isNull,
 } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
@@ -24,8 +25,9 @@ export const findSavedJob = async (
     .where(
       and(
         eq(savedJobs.userId, userId),
-        eq(savedJobs.jobId, jobId)
-      )
+        eq(savedJobs.jobId, jobId),
+        isNull(savedJobs.deletedAt),
+      ),
     )
     .limit(1);
 
@@ -40,6 +42,30 @@ export const insertSavedJob = async (
   userId,
   jobId
 ) => {
+  // if soft-deleted exists, restore it instead of duplicate
+  const [softDeleted] = await db
+    .select()
+    .from(savedJobs)
+    .where(
+      and(
+        eq(savedJobs.userId, userId),
+        eq(savedJobs.jobId, jobId),
+      ),
+    )
+    .limit(1);
+
+  if (softDeleted) {
+    if (softDeleted.deletedAt) {
+      const [restored] = await db
+        .update(savedJobs)
+        .set({ deletedAt: null })
+        .where(eq(savedJobs.id, softDeleted.id))
+        .returning();
+      return restored;
+    }
+    return softDeleted;
+  }
+
   const [savedJob] = await db
     .insert(savedJobs)
     .values({
@@ -52,7 +78,7 @@ export const insertSavedJob = async (
 };
 
 // ============================================
-// UNSAVE JOB
+// UNSAVE JOB (soft)
 // ============================================
 
 export const deleteSavedJob = async (
@@ -60,12 +86,14 @@ export const deleteSavedJob = async (
   jobId
 ) => {
   const [deleted] = await db
-    .delete(savedJobs)
+    .update(savedJobs)
+    .set({ deletedAt: new Date() })
     .where(
       and(
         eq(savedJobs.userId, userId),
-        eq(savedJobs.jobId, jobId)
-      )
+        eq(savedJobs.jobId, jobId),
+        isNull(savedJobs.deletedAt),
+      ),
     )
     .returning();
 
@@ -85,7 +113,7 @@ export const getSavedJobCount = async (
     })
     .from(savedJobs)
     .where(
-      eq(savedJobs.userId, userId)
+      and(eq(savedJobs.userId, userId), isNull(savedJobs.deletedAt)),
     );
 
   return Number(result?.count ?? 0);
@@ -116,7 +144,11 @@ export const getSavedJobs = async (
       eq(savedJobs.jobId, jobs.id)
     )
     .where(
-      eq(savedJobs.userId, userId)
+      and(
+        eq(savedJobs.userId, userId),
+        isNull(savedJobs.deletedAt),
+        isNull(jobs.deletedAt),
+      ),
     )
     .orderBy(
       desc(savedJobs.createdAt)

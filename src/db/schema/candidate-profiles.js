@@ -59,6 +59,10 @@ export const candidateProfiles = pgTable("candidate_profiles", {
     .default({})
     .notNull(),
 
+  deletedAt: timestamp("deleted_at", {
+    withTimezone: true,
+  }),
+
   createdAt: timestamp("created_at", {
     withTimezone: true,
   })

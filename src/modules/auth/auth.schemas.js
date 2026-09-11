@@ -92,3 +92,24 @@ export const changePasswordSchema = {
 
   },
 };
+
+export const verifyLogin2faSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+
+    required: ["ticket", "code"],
+
+    properties: {
+      ticket: {
+        type: "string",
+        minLength: 20,
+      },
+
+      code: {
+        type: "string",
+        pattern: "^[0-9]{6}$",
+      },
+    },
+  },
+};

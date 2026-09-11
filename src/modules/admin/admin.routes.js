@@ -6,10 +6,43 @@ import {
   rejectRecruiterController,
   updateRecruiterController,
   suspendRecruiterController,
+  unsuspendRecruiterController,
   deleteRecruiterController,
 } from "./admin.controller.js";
 
+import { getAdminReportsData } from "../dashboard/dashboard.service.js";
+
 export default async function adminRoutes(app) {
+  // ============================================
+  // GET PLATFORM REPORTS
+  // ============================================
+
+  app.get(
+    "/reports",
+    {
+      preHandler: [app.authenticate, app.authorize(["admin"])],
+    },
+    async (request, reply) => {
+      try {
+        const data = await getAdminReportsData();
+
+        return reply.code(200).send({
+          success: true,
+
+          data,
+        });
+      } catch (error) {
+        request.log.error(error);
+
+        return reply.code(500).send({
+          success: false,
+
+          message: "Failed to load reports",
+        });
+      }
+    },
+  );
+
   // ============================================
   // GET ALL USERS
   // ============================================
@@ -92,6 +125,18 @@ export default async function adminRoutes(app) {
       preHandler: [app.authenticate, app.authorize(["admin"])],
     },
     suspendRecruiterController,
+  );
+
+  // ============================================
+  // UNSUSPEND RECRUITER
+  // ============================================
+
+  app.patch(
+    "/recruiters/:id/unsuspend",
+    {
+      preHandler: [app.authenticate, app.authorize(["admin"])],
+    },
+    unsuspendRecruiterController,
   );
 
   // ============================================

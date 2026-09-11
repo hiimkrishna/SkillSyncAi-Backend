@@ -1,6 +1,7 @@
 import {
   getAllJobs,
   getSingleJob,
+  getMatchedJobs,
   getMyJobs,
   getMySingleJob,
   createNewJob,
@@ -11,6 +12,7 @@ import {
 
 import {
   getJobsSchema,
+  getMatchedJobsSchema,
   jobIdSchema,
   createJobSchema,
   updateJobSchema,
@@ -28,6 +30,34 @@ export default async function jobRoutes(app) {
       schema: getJobsSchema,
     },
     getAllJobs,
+  );
+
+  // ==========================================
+  // CANDIDATE AI JOB MATCH (static — before /:id)
+  // GET /api/jobs/match?limit=20
+  // ==========================================
+
+  app.get(
+    "/match",
+    {
+      preHandler: [app.authenticate, app.authorize(["candidate"])],
+
+      schema: getMatchedJobsSchema,
+    },
+
+    getMatchedJobs,
+  );
+
+  // Alias: GET /api/jobs/matched
+  app.get(
+    "/matched",
+    {
+      preHandler: [app.authenticate, app.authorize(["candidate"])],
+
+      schema: getMatchedJobsSchema,
+    },
+
+    getMatchedJobs,
   );
 
   // ==========================================

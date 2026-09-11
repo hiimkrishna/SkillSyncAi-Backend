@@ -2,6 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 
+import { db } from "../../db/index.js";
+import { candidateProfiles } from "../../db/schema/candidate-profiles.js";
+
 import {
   getCandidateProfileIdByUserId,
   getResumesByCandidateId,
@@ -10,9 +13,9 @@ import {
   deleteResumeByIdAndCandidateId,
 } from "./resume.repository.js";
 
-import { extractPdfText } from "./extraction/pdf.extractor.js";
-import { extractDocxText } from "./extraction/docx.extractor.js";
-import { extractPdfTextWithOCR } from "./extraction/ocr.extractor.js";
+import {
+  extractTextFromResume,
+} from "./extraction/resumeTextExtractor.js";
 
 import { parseResume } from "./parsing/resume.parser.js";
 import { normalizeResume } from "./parsing/resume.normalizer.js";
@@ -39,22 +42,53 @@ const resolveCandidateProfileId = async (userId) => {
   const candidateId =
     await getCandidateProfileIdByUserId(userId);
 
-  if (!candidateId) {
-    const error = new Error(
-      "Candidate profile not found"
+  if (candidateId) {
+    console.log(
+      "[SERVICE] Candidate profile found:",
+      candidateId
     );
 
-    error.statusCode = 404;
+    return candidateId;
+  }
 
+  console.warn(
+    "[SERVICE] Candidate profile missing for user, creating fallback profile"
+  );
+
+  const [createdProfile] = await db
+    .insert(candidateProfiles)
+    .values({
+      userId,
+      phone: null,
+      location: null,
+      headline: null,
+      bio: null,
+      skills: [],
+      education: [],
+      experience: [],
+      certifications: [],
+      portfolio: [],
+      socialLinks: {},
+    })
+    .returning({
+      id: candidateProfiles.id,
+    });
+
+  if (!createdProfile?.id) {
+    const error = new Error(
+      "Candidate profile could not be created"
+    );
+
+    error.statusCode = 500;
     throw error;
   }
 
   console.log(
-    "[SERVICE] Candidate profile found:",
-    candidateId
+    "[SERVICE] Fallback candidate profile created:",
+    createdProfile.id
   );
 
-  return candidateId;
+  return createdProfile.id;
 };
 
 // ============================================
@@ -228,120 +262,33 @@ export const createResume = async ({
     // PDF
     // ========================================
 
-    if (extension === ".pdf") {
-      console.log("\n========================================");
-      console.log("[12] PDF DETECTED");
-      console.log("========================================");
-
-      // --------------------------------------
-      // NORMAL PDF EXTRACTION
-      // --------------------------------------
-
-      console.log(
-        "[13] Starting normal PDF text extraction..."
-      );
-
-      const extractionStart =
-        Date.now();
-
-      rawText =
-        await extractPdfText(buffer);
-
-      console.log(
-        "[14] Normal PDF extraction completed"
-      );
-
-      console.log(
-        "Extraction time:",
-        `${Date.now() - extractionStart} ms`
-      );
-
-      console.log(
-        "Extracted text length:",
-        rawText?.length
-      );
-
-      // --------------------------------------
-      // OCR FALLBACK
-      // --------------------------------------
-
-      if (
-        !rawText ||
-        rawText.trim().length < 30
-      ) {
-        console.log(
-          "\n========================================"
-        );
-
-        console.log(
-          "[15] NORMAL PDF TEXT INSUFFICIENT"
-        );
-
-        console.log(
-          "Starting PaddleOCR fallback..."
-        );
-
-        console.log(
-          "========================================"
-        );
-
-        const ocrStart =
-          Date.now();
-
-        rawText =
-          await extractPdfTextWithOCR(
-            buffer
-          );
-
-        console.log(
-          "[16] OCR completed"
-        );
-
-        console.log(
-          "OCR time:",
-          `${Date.now() - ocrStart} ms`
-        );
-
-        console.log(
-          "OCR text length:",
-          rawText?.length
-        );
-      }
-    }
-
-    // ========================================
-    // DOCX
-    // ========================================
-
-    else if (
+    if (
+      extension === ".pdf" ||
       extension === ".docx"
     ) {
       console.log(
         "\n========================================"
       );
-
       console.log(
-        "[12] DOCX DETECTED"
+        "[12] RESUME FILE DETECTED",
+        extension.toUpperCase()
       );
-
       console.log(
         "========================================"
-      );
-
-      console.log(
-        "[13] Starting DOCX text extraction..."
       );
 
       const extractionStart =
         Date.now();
 
-      rawText =
-        await extractDocxText(
-          buffer
-        );
+      rawText = await extractTextFromResume(
+        buffer,
+        extension === ".pdf"
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      );
 
       console.log(
-        "[14] DOCX extraction completed"
+        "[14] Extraction completed"
       );
 
       console.log(

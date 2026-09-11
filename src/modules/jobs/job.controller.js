@@ -69,6 +69,50 @@ export const getSingleJob = async (request, reply) => {
   }
 };
 
+import {
+  getMatchedJobsForCandidate,
+  MATCH_DEFAULT_LIMIT,
+} from "./job.match.service.js";
+
+// ============================================
+// GET MATCHED JOBS (candidate AI Job Match)
+// GET /api/jobs/match?limit=20
+// ============================================
+
+export const getMatchedJobs = async (request, reply) => {
+  try {
+    const userId = request.user.userId;
+
+    const { limit, useAi } = request.query || {};
+
+    const matches = await getMatchedJobsForCandidate(
+      userId,
+      limit ? Number(limit) : MATCH_DEFAULT_LIMIT,
+      useAi,
+    );
+
+    return reply.code(200).send({
+      success: true,
+      data: matches,
+      count: matches.length,
+    });
+  } catch (error) {
+    request.log.error(error);
+
+    if (error.statusCode === 404) {
+      return reply.code(404).send({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return reply.code(500).send({
+      success: false,
+      message: "Failed to load matched jobs",
+    });
+  }
+};
+
 // ============================================
 // GET MY JOBS
 // ============================================
@@ -225,9 +269,9 @@ export const updateJobStatusController = async (request, reply) => {
   } catch (error) {
     request.log.error(error);
 
-    return reply.code(500).send({
+    return reply.code(error.statusCode || 500).send({
       success: false,
-      message: "Failed to update job status",
+      message: error.message || "Failed to update job status",
     });
   }
 };

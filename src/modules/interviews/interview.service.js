@@ -9,6 +9,10 @@ import {
 
 import { getApplicationById } from "../applications/application.service.js";
 
+import { db } from "../../db/index.js";
+import { jobs } from "../../db/schema/jobs.js";
+import { eq } from "drizzle-orm";
+
 // ============================================
 // SCHEDULE INTERVIEW
 // ============================================
@@ -97,6 +101,27 @@ export const scheduleInterview = async (recruiterId, data) => {
     error.statusCode = 400;
 
     throw error;
+  }
+
+  // --------------------------------------------
+  // VALIDATE AGAINST JOB DEADLINE
+  // Interview must be after application deadline
+  // --------------------------------------------
+
+  const jobDeadline = application.job?.applicationDeadline;
+
+  if (jobDeadline) {
+    const deadlineDate = new Date(jobDeadline);
+
+    if (!Number.isNaN(deadlineDate.getTime()) && interviewDate <= deadlineDate) {
+      const error = new Error(
+        `Interview must be scheduled after the application deadline (${deadlineDate.toLocaleDateString()})`,
+      );
+
+      error.statusCode = 400;
+
+      throw error;
+    }
   }
 
   // --------------------------------------------
@@ -254,6 +279,24 @@ export const rescheduleInterview = async (interviewId, recruiterId, data) => {
       error.statusCode = 400;
 
       throw error;
+    }
+
+    // Validate against job deadline
+    const [job] = await db
+      .select({ applicationDeadline: jobs.applicationDeadline })
+      .from(jobs)
+      .where(eq(jobs.id, interview.jobId))
+      .limit(1);
+
+    if (job?.applicationDeadline) {
+      const deadlineDate = new Date(job.applicationDeadline);
+      if (!Number.isNaN(deadlineDate.getTime()) && newDate <= deadlineDate) {
+        const error = new Error(
+          `Interview must be scheduled after the application deadline (${deadlineDate.toLocaleDateString()})`,
+        );
+        error.statusCode = 400;
+        throw error;
+      }
     }
 
     updateData.scheduledAt = newDate;

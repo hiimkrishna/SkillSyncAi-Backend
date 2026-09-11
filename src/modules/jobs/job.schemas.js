@@ -120,6 +120,10 @@ export const createJobSchema = {
 
         enum: ["open", "closed", "draft"],
       },
+
+      applicationDeadline: {
+        type: "string",
+      },
     },
   },
 };
@@ -193,6 +197,41 @@ export const updateJobSchema = {
         type: "string",
 
         enum: ["open", "closed", "draft"],
+      },
+
+      applicationDeadline: {
+        type: "string",
+      },
+    },
+  },
+};
+
+// ============================================
+// GET MATCHED JOBS (candidate AI match)
+// GET /api/jobs/match?limit=20
+// ============================================
+
+export const getMatchedJobsSchema = {
+  querystring: {
+    type: "object",
+
+    additionalProperties: false,
+
+    properties: {
+      limit: {
+        type: "integer",
+
+        minimum: 1,
+
+        maximum: 50,
+
+        default: 20,
+      },
+
+      useAi: {
+        type: "boolean",
+
+        default: false,
       },
     },
   },

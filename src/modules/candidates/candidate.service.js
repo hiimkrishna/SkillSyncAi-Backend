@@ -233,10 +233,22 @@ export const updateCandidateProfile = async (
   userId,
   data
 ) => {
+  const { fullName, ...profileData } = data || {};
+
+  if (fullName) {
+    await db
+      .update(users)
+      .set({
+        fullName,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  }
+
   const [profile] = await db
     .update(candidateProfiles)
     .set({
-      ...data,
+      ...profileData,
       updatedAt: new Date(),
     })
     .where(
@@ -254,7 +266,7 @@ export const updateCandidateProfile = async (
   if (!profile) {
     return createCandidateProfile(
       userId,
-      data
+      profileData
     );
   }
 
