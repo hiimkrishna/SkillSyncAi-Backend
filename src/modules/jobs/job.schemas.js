@@ -115,6 +115,34 @@ export const createJobSchema = {
         type: "string",
       },
 
+      requiredSkills: {
+        type: "array",
+        items: { type: "string" },
+        maxItems: 30,
+      },
+
+      minMatchScore: {
+        type: "integer",
+        minimum: 0,
+        maximum: 100,
+      },
+
+      minExperienceYears: {
+        type: "integer",
+        minimum: 0,
+        maximum: 50,
+      },
+
+      educationRequirement: {
+        type: "string",
+        maxLength: 255,
+      },
+
+      minEducationGrade: {
+        type: "number",
+        minimum: 0,
+      },
+
       status: {
         type: "string",
 
@@ -191,6 +219,34 @@ export const updateJobSchema = {
 
       requirements: {
         type: "string",
+      },
+
+      requiredSkills: {
+        type: "array",
+        items: { type: "string" },
+        maxItems: 30,
+      },
+
+      minMatchScore: {
+        type: "integer",
+        minimum: 0,
+        maximum: 100,
+      },
+
+      minExperienceYears: {
+        type: "integer",
+        minimum: 0,
+        maximum: 50,
+      },
+
+      educationRequirement: {
+        type: "string",
+        maxLength: 255,
+      },
+
+      minEducationGrade: {
+        type: "number",
+        minimum: 0,
       },
 
       status: {

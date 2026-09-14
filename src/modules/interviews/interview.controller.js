@@ -1,10 +1,13 @@
 import {
   scheduleInterview,
   getRecruiterInterviews,
+  getCandidateInterviews,
   getRecruiterInterviewById,
   rescheduleInterview,
   cancelRecruiterInterview,
   completeRecruiterInterview,
+  requestRescheduleAsCandidate,
+  respondToRescheduleRequest,
 } from "./interview.service.js";
 
 // ============================================
@@ -54,6 +57,95 @@ export const getRecruiterInterviewsController = async (request, reply) => {
     return reply.code(error.statusCode || 500).send({
       success: false,
       message: error.message || "Failed to fetch interviews",
+    });
+  }
+};
+
+// ============================================
+// GET CANDIDATE INTERVIEWS (calendar)
+// GET /api/interviews/candidate
+// ============================================
+
+export const getCandidateInterviewsController = async (request, reply) => {
+  try {
+    const candidateId = request.user.userId;
+
+    const interviews = await getCandidateInterviews(candidateId);
+
+    return reply.code(200).send({
+      success: true,
+      data: interviews,
+    });
+  } catch (error) {
+    request.log.error(error);
+
+    return reply.code(error.statusCode || 500).send({
+      success: false,
+      message: error.message || "Failed to fetch interviews",
+    });
+  }
+};
+
+// ============================================
+// CANDIDATE RESCHEDULE REQUEST
+// POST /api/interviews/:id/reschedule-request
+// ============================================
+
+export const requestRescheduleController = async (request, reply) => {
+  try {
+    const candidateId = request.user.userId;
+
+    const { id: interviewId } = request.params;
+
+    const interview = await requestRescheduleAsCandidate(
+      interviewId,
+      candidateId,
+      request.body || {},
+    );
+
+    return reply.code(200).send({
+      success: true,
+      message: "Reschedule request sent to the recruiter",
+      data: interview,
+    });
+  } catch (error) {
+    request.log.error(error);
+
+    return reply.code(error.statusCode || 500).send({
+      success: false,
+      message: error.message || "Failed to request rescheduling",
+    });
+  }
+};
+
+// ============================================
+// RECRUITER RESCHEDULE RESPONSE
+// PATCH /api/interviews/:id/reschedule-respond
+// ============================================
+
+export const respondRescheduleController = async (request, reply) => {
+  try {
+    const recruiterId = request.user.userId;
+
+    const { id: interviewId } = request.params;
+
+    const interview = await respondToRescheduleRequest(
+      interviewId,
+      recruiterId,
+      request.body || {},
+    );
+
+    return reply.code(200).send({
+      success: true,
+      message: "Reschedule request updated",
+      data: interview,
+    });
+  } catch (error) {
+    request.log.error(error);
+
+    return reply.code(error.statusCode || 500).send({
+      success: false,
+      message: error.message || "Failed to respond to reschedule request",
     });
   }
 };

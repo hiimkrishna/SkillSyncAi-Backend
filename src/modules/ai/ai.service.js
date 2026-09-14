@@ -25,8 +25,8 @@ import {
 import {
   buildJobRecommendationPrompt,
   normalizeRecommendations,
-  fallbackRecommendations,
 } from "./prompts/job-recommendation.prompt.js";
+import { scoreCandidateForJob } from "../jobs/job.match.service.js";
 
 // ============================================
 // HELPERS
@@ -432,37 +432,79 @@ export const autoGenerateEvaluationForApplication = async (applicationId) => {
 // ============================================
 
 export const recommendJobsForCandidate = async (userId, limit = 10) => {
-  const resume = await getResumeForUser(userId);
-  if (!resume) {
-    const err = new Error("No resume found. Upload a resume first.");
-    err.statusCode = 404;
-    throw err;
-  }
-
-  const resumeData = resume.resumeData || {};
-  const rawText = resume.rawText || "";
+  const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
 
   const openJobs = await db
     .select()
     .from(jobs)
     .where(and(eq(jobs.status, "open"), isNull(jobs.deletedAt)))
-    .orderBy(jobs.createdAt)
+    .orderBy(desc(jobs.createdAt))
     .limit(30);
 
   if (!openJobs.length) return [];
 
-  // Try AI ranking, fallback to deterministic
+  // THE unified score (merged profile + parsed resume) — the exact same
+  // number /jobs/match shows and the apply gate enforces. The LLM only
+  // ever contributes reason sentences, never numbers.
+  const scored = [];
+  for (const job of openJobs) {
+    const s = await scoreCandidateForJob(userId, job);
+    if (!s.hasUsableData && s.matchScore === 0) continue;
+    scored.push({
+      jobId: job.id,
+      score: s.matchScore,
+      matchedSkills: s.matchedSkills,
+      missingSkills: s.missingSkills,
+      reason: s.reason,
+      job: {
+        id: job.id,
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        type: job.type,
+        description: job.description,
+        requirements: job.requirements,
+        status: job.status,
+        salaryMin: job.salaryMin,
+        salaryMax: job.salaryMax,
+        applicationDeadline: job.applicationDeadline,
+        createdAt: job.createdAt,
+      },
+    });
+  }
+
+  if (!scored.length) {
+    const err = new Error(
+      "Complete your profile and upload a resume to get AI job matches.",
+    );
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // Optional LLM polish: borrow its reason sentences onto our rows.
   try {
+    const { snapshot } = await scoreCandidateForJob(userId, openJobs[0]);
     const { system, user } = buildJobRecommendationPrompt({
-      resumeData,
-      rawText,
+      resumeData: snapshot.mergedResumeData,
+      rawText: snapshot.rawText,
       jobs: openJobs,
     });
     const raw = await callAIJSON({ system, user, temperature: 0.2 });
     const normalized = normalizeRecommendations(raw, openJobs);
-    if (normalized.length) return normalized;
-    return fallbackRecommendations(resumeData, openJobs).slice(0, limit);
+    const reasonsByJob = new Map(
+      normalized
+        .filter((r) => r.reason)
+        .map((r) => [String(r.jobId), r.reason]),
+    );
+    for (const row of scored) {
+      const llmReason = reasonsByJob.get(String(row.jobId));
+      if (llmReason) row.reason = llmReason;
+    }
   } catch {
-    return fallbackRecommendations(resumeData, openJobs).slice(0, limit);
+    // LLM unavailable — deterministic reasons stand.
   }
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, safeLimit);
 };

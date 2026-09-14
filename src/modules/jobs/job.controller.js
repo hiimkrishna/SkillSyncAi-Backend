@@ -74,6 +74,11 @@ import {
   MATCH_DEFAULT_LIMIT,
 } from "./job.match.service.js";
 
+import {
+  checkEligibility,
+  jobHasEligibilityFilters,
+} from "./job.eligibility.service.js";
+
 // ============================================
 // GET MATCHED JOBS (candidate AI Job Match)
 // GET /api/jobs/match?limit=20
@@ -109,6 +114,45 @@ export const getMatchedJobs = async (request, reply) => {
     return reply.code(500).send({
       success: false,
       message: "Failed to load matched jobs",
+    });
+  }
+};
+
+// ============================================
+// GET MY ELIGIBILITY FOR A JOB (candidate)
+// GET /api/jobs/:id/eligibility
+// Jobs stay visible; this tells the candidate
+// whether they may apply + what is missing.
+// ============================================
+
+export const getJobEligibility = async (request, reply) => {
+  try {
+    const userId = request.user.userId;
+
+    const { id } = request.params;
+
+    const job = await getJobById(id);
+
+    if (!job) {
+      return reply.code(404).send({
+        success: false,
+        message: "Job not found",
+      });
+    }
+
+    const eligibility = await checkEligibility(userId, job);
+
+    return reply.code(200).send({
+      success: true,
+      hasFilters: jobHasEligibilityFilters(job),
+      data: eligibility,
+    });
+  } catch (error) {
+    request.log.error(error);
+
+    return reply.code(500).send({
+      success: false,
+      message: "Failed to check eligibility",
     });
   }
 };

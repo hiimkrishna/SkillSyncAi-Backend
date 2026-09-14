@@ -1,10 +1,13 @@
 import {
   scheduleInterviewController,
   getRecruiterInterviewsController,
+  getCandidateInterviewsController,
   getRecruiterInterviewByIdController,
   updateInterviewController,
   cancelInterviewController,
   completeInterviewController,
+  requestRescheduleController,
+  respondRescheduleController,
 } from "./interview.controller.js";
 
 export default async function interviewRoutes(fastify) {
@@ -32,6 +35,45 @@ export default async function interviewRoutes(fastify) {
       preHandler: [fastify.authenticate],
     },
     getRecruiterInterviewsController,
+  );
+
+  // ============================================
+  // GET CANDIDATE INTERVIEWS (static — before /:id)
+  // GET /api/interviews/candidate
+  // ============================================
+
+  fastify.get(
+    "/candidate",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    getCandidateInterviewsController,
+  );
+
+  // ============================================
+  // CANDIDATE RESCHEDULE REQUEST
+  // POST /api/interviews/:id/reschedule-request
+  // ============================================
+
+  fastify.post(
+    "/:id/reschedule-request",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    requestRescheduleController,
+  );
+
+  // ============================================
+  // RECRUITER RESCHEDULE RESPONSE
+  // PATCH /api/interviews/:id/reschedule-respond
+  // ============================================
+
+  fastify.patch(
+    "/:id/reschedule-respond",
+    {
+      preHandler: [fastify.authenticate],
+    },
+    respondRescheduleController,
   );
 
   // ============================================

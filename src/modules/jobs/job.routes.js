@@ -2,6 +2,7 @@ import {
   getAllJobs,
   getSingleJob,
   getMatchedJobs,
+  getJobEligibility,
   getMyJobs,
   getMySingleJob,
   createNewJob,
@@ -148,6 +149,22 @@ export default async function jobRoutes(app) {
     },
 
     removeJob,
+  );
+
+  // ==========================================
+  // CANDIDATE ELIGIBILITY FOR A JOB
+  // (static suffix — before /:id)
+  // ==========================================
+
+  app.get(
+    "/:id/eligibility",
+    {
+      preHandler: [app.authenticate, app.authorize(["candidate"])],
+
+      schema: jobIdSchema,
+    },
+
+    getJobEligibility,
   );
 
   // ==========================================

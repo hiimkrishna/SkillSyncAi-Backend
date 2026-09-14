@@ -22,6 +22,47 @@ export const applyToJobSchema = {
 };
 
 // ============================================
+// RECRUITER APPLICATION FILTERS
+// GET /api/applications/recruiter
+// Supervisor mod #4: filter applicants by
+// skills, education keyword/grade, experience
+// years and match score.
+// ============================================
+
+export const recruiterApplicationsQuerySchema = {
+  querystring: {
+    type: "object",
+    additionalProperties: false,
+
+    properties: {
+      jobId: { type: "string", format: "uuid" },
+
+      status: {
+        type: "string",
+        enum: [
+          "pending",
+          "screening",
+          "shortlisted",
+          "interview",
+          "offer",
+          "rejected",
+        ],
+      },
+
+      skills: { type: "string", maxLength: 500 },
+
+      education: { type: "string", maxLength: 255 },
+
+      minGrade: { type: "number", minimum: 0 },
+
+      minExperience: { type: "number", minimum: 0 },
+
+      minScore: { type: "number", minimum: 0, maximum: 100 },
+    },
+  },
+};
+
+// ============================================
 // APPLICATION ID
 // /api/applications/:id
 // ============================================

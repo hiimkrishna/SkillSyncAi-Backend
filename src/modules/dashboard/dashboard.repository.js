@@ -1,4 +1,4 @@
-import { eq, desc, count, and, gte, lte, isNull } from "drizzle-orm";
+import { eq, desc, count, and, gte, lte, isNull, inArray } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
 
@@ -113,6 +113,43 @@ export const getRecentApplications = async (candidateId) => {
     )
     .orderBy(desc(applications.createdAt))
     .limit(5);
+};
+
+// ============================================
+// GET CANDIDATE UPCOMING INTERVIEWS
+// Next live interviews with job context.
+// ============================================
+
+export const getUpcomingInterviews = async (candidateId, limit = 5) => {
+  return db
+    .select({
+      id: interviews.id,
+      applicationId: interviews.applicationId,
+      type: interviews.type,
+      status: interviews.status,
+      title: interviews.title,
+      scheduledAt: interviews.scheduledAt,
+      durationMinutes: interviews.durationMinutes,
+      meetingLink: interviews.meetingLink,
+      location: interviews.location,
+      notes: interviews.notes,
+      rescheduleStatus: interviews.rescheduleStatus,
+      position: jobs.title,
+      company: jobs.company,
+    })
+    .from(interviews)
+    .innerJoin(jobs, eq(interviews.jobId, jobs.id))
+    .where(
+      and(
+        eq(interviews.candidateId, candidateId),
+        inArray(interviews.status, ["scheduled", "rescheduled"]),
+        gte(interviews.scheduledAt, new Date()),
+        isNull(interviews.deletedAt),
+        isNull(jobs.deletedAt),
+      ),
+    )
+    .orderBy(interviews.scheduledAt)
+    .limit(limit);
 };
 
 // ============================================

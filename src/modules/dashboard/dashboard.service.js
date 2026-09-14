@@ -39,6 +39,7 @@ import {
   getCandidateApplicationsInRange,
   getRecruiterApplicationsInRange,
   getRecruiterJobsInRange,
+  getUpcomingInterviews,
 } from "./dashboard.repository.js";
 
 import { calculateProfileCompletion } from "../../utils/profile-completion.js";
@@ -128,6 +129,7 @@ const getCandidateDashboardData = async (user) => {
     savedJobsCount,
     recentApplications,
     recommendedJobs,
+    upcomingInterviews,
   ] = await Promise.all([
     getApplicationCount(user.id),
 
@@ -138,6 +140,8 @@ const getCandidateDashboardData = async (user) => {
     getRecentApplications(user.id),
 
     getRecommendedJobs(user.id),
+
+    getUpcomingInterviews(user.id, 5),
   ]);
 
   // ============================================
@@ -340,6 +344,8 @@ const getCandidateDashboardData = async (user) => {
     quickStats,
 
     recentApplications: formattedApplications,
+
+    upcomingInterviews,
 
     recommendedJobs: formattedJobs,
 

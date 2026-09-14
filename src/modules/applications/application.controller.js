@@ -55,6 +55,7 @@ export const applyToJobController = async (request, reply) => {
     return reply.code(error.statusCode || 400).send({
       success: false,
       message: error.message || "Failed to apply for job",
+      ...(error.details ? { eligibility: error.details } : {}),
     });
   }
 };
@@ -93,7 +94,10 @@ export const getRecruiterApplicationsController = async (request, reply) => {
   try {
     const recruiterId = request.user.userId;
 
-    const applications = await getRecruiterApplications(recruiterId);
+    const applications = await getRecruiterApplications(
+      recruiterId,
+      request.query || {},
+    );
 
     return reply.code(200).send({
       success: true,

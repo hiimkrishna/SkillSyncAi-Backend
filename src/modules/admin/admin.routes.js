@@ -11,6 +11,7 @@ import {
 } from "./admin.controller.js";
 
 import { getAdminReportsData } from "../dashboard/dashboard.service.js";
+import { buildAdminReportPdf } from "../../utils/report-pdf.js";
 
 export default async function adminRoutes(app) {
   // ============================================
@@ -38,6 +39,44 @@ export default async function adminRoutes(app) {
           success: false,
 
           message: "Failed to load reports",
+        });
+      }
+    },
+  );
+
+  // ============================================
+  // GET PLATFORM REPORT AS PDF
+  // Supervisor mod #6: proper formatted report.
+  // ============================================
+
+  app.get(
+    "/reports/pdf",
+    {
+      preHandler: [app.authenticate, app.authorize(["admin"])],
+    },
+    async (request, reply) => {
+      try {
+        const data = await getAdminReportsData();
+
+        const pdf = await buildAdminReportPdf(data, {
+          generatedFor: "Platform administrator",
+        });
+
+        return reply
+          .code(200)
+          .header("Content-Type", "application/pdf")
+          .header(
+            "Content-Disposition",
+            'attachment; filename="skillsync-platform-report.pdf"',
+          )
+          .send(pdf);
+      } catch (error) {
+        request.log.error(error);
+
+        return reply.code(500).send({
+          success: false,
+
+          message: "Failed to generate reports PDF",
         });
       }
     },

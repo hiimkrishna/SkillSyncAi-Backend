@@ -4,6 +4,8 @@ import {
   uuid,
   text,
   integer,
+  jsonb,
+  varchar,
   timestamp,
 } from "drizzle-orm/pg-core";
 
@@ -87,6 +89,21 @@ export const interviews = pgTable("interviews", {
 
   // Recruiter's notes
   notes: text("notes"),
+
+  // Candidate reschedule request (supervisor mods)
+  // rescheduleRequest: { proposedAt, reason, requestedAt }
+  rescheduleRequest: jsonb("reschedule_request"),
+
+  rescheduleStatus: varchar("reschedule_status", {
+    length: 20,
+  })
+    .default("none")
+    .notNull(),
+
+  // Set once the automatic 24h reminder email is sent
+  reminderSentAt: timestamp("reminder_sent_at", {
+    withTimezone: true,
+  }),
 
   deletedAt: timestamp("deleted_at", {
     withTimezone: true,

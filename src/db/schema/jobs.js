@@ -4,6 +4,8 @@ import {
   varchar,
   text,
   integer,
+  real,
+  jsonb,
   timestamp,
 } from "drizzle-orm/pg-core";
 
@@ -43,6 +45,28 @@ export const jobs = pgTable("jobs", {
   salaryMax: integer("salary_max"),
 
   requirements: text("requirements"),
+
+  // ============================================
+  // ELIGIBILITY FILTERS (supervisor mods)
+  // Jobs stay visible to everyone; candidates
+  // below these bars cannot apply (422).
+  // ============================================
+
+  requiredSkills: jsonb("required_skills")
+    .default([])
+    .notNull(),
+
+  minMatchScore: integer("min_match_score")
+    .default(0)
+    .notNull(),
+
+  minExperienceYears: integer("min_experience_years")
+    .default(0)
+    .notNull(),
+
+  educationRequirement: text("education_requirement"),
+
+  minEducationGrade: real("min_education_grade"),
 
   status: varchar("status", {
     length: 50,

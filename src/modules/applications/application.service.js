@@ -7,6 +7,14 @@ import { jobs } from "../../db/schema/jobs.js";
 import { users } from "../../db/schema/users.js";
 import { candidateProfiles } from "../../db/schema/candidate-profiles.js";
 import { resumes } from "../../db/schema/resumes.js";
+import { interviews } from "../../db/schema/interviews.js";
+import {
+  checkEligibility,
+  findJobWithFilters,
+  estimateExperienceYears,
+  bestEducationGrade,
+} from "../jobs/job.eligibility.service.js";
+import { scoreJob } from "../jobs/job.match.service.js";
 
 // ============================================
 // ATTACH CANDIDATE PROFILE + RESUME
@@ -157,6 +165,28 @@ export const applyToJob = async (candidateId, jobId) => {
     throw error;
   }
 
+  // ------------------------------------------
+  // Minimum-requirement gate (supervisor mods):
+  // the job stays visible, but NOBODY below the bar may apply.
+  // The platform floor (match score 80+) always applies; a job's
+  // own filters can only tighten further.
+  // ------------------------------------------
+
+  const fullJob = await findJobWithFilters(jobId);
+
+  if (fullJob) {
+    const eligibility = await checkEligibility(candidateId, fullJob);
+
+    if (!eligibility.eligible) {
+      const error = new Error(
+        `You do not meet this job's minimum requirements: ${eligibility.reasons.join("; ")}`,
+      );
+      error.statusCode = 422;
+      error.details = eligibility;
+      throw error;
+    }
+  }
+
   const [existingApplication] = await db
     .select({
       id: applications.id,
@@ -289,7 +319,12 @@ export const getMyApplications = async (candidateId) => {
     )
     .orderBy(desc(applications.createdAt));
 
-  return results.map((application) => ({
+  const withInterviews = await attachLatestInterviews(
+    candidateId,
+    results,
+  );
+
+  return withInterviews.map((application) => ({
     ...application,
 
     jobTitle: application.job?.title || "",
@@ -298,11 +333,89 @@ export const getMyApplications = async (candidateId) => {
   }));
 };
 
+// Attach the latest live interview (if any) to each of the
+// candidate's applications so one page can show both.
+const attachLatestInterviews = async (candidateId, rows) => {
+  if (!rows.length) return rows;
+
+  const interviewRows = await db
+    .select({
+      id: interviews.id,
+      applicationId: interviews.applicationId,
+      type: interviews.type,
+      status: interviews.status,
+      title: interviews.title,
+      scheduledAt: interviews.scheduledAt,
+      durationMinutes: interviews.durationMinutes,
+      meetingLink: interviews.meetingLink,
+      location: interviews.location,
+      notes: interviews.notes,
+      rescheduleRequest: interviews.rescheduleRequest,
+      rescheduleStatus: interviews.rescheduleStatus,
+    })
+    .from(interviews)
+    .where(
+      and(
+        eq(interviews.candidateId, candidateId),
+        isNull(interviews.deletedAt),
+      ),
+    )
+    .orderBy(desc(interviews.scheduledAt));
+
+  const latestByApplication = new Map();
+  for (const interview of interviewRows) {
+    const current = latestByApplication.get(interview.applicationId);
+    // Prefer a live interview over a finished one.
+    const live = ["scheduled", "rescheduled"].includes(interview.status);
+    if (!current || (live && !["scheduled", "rescheduled"].includes(current.status))) {
+      latestByApplication.set(interview.applicationId, interview);
+    }
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    interview: latestByApplication.get(row.id) ?? null,
+  }));
+};
+
 // ============================================
 // GET RECRUITER APPLICATIONS
 // ============================================
 
-export const getRecruiterApplications = async (recruiterId) => {
+// Snapshot helpers for applicant filtering (profile data already
+// enriched onto each row by attachCandidateDetails).
+const rowSkillKeys = (row) => {
+  const skills = row?.candidate?.skills;
+  if (!Array.isArray(skills)) return [];
+  const keys = [];
+  for (const item of skills) {
+    const raw = typeof item === "string" ? item : (item?.name ?? "");
+    const cleaned = String(raw).trim().toLowerCase();
+    if (cleaned) keys.push(cleaned);
+  }
+  return keys;
+};
+
+const rowToSnapshot = (row) => ({
+  skills: rowSkillKeys(row).map((key) => ({ key, original: key })),
+  headline: row?.candidate?.headline || "",
+  bio: row?.candidate?.bio || "",
+  location: row?.candidate?.location || "",
+  experience: Array.isArray(row?.candidate?.experience)
+    ? row.candidate.experience
+    : [],
+});
+
+const parseSkillsFilter = (value) => {
+  if (!value) return [];
+  return String(value)
+    .split(/[,;|]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 20);
+};
+
+export const getRecruiterApplications = async (recruiterId, filters = {}) => {
   console.log("RECRUITER ID:", recruiterId);
   const [recruiter] = await db
     .select({
@@ -400,7 +513,94 @@ export const getRecruiterApplications = async (recruiterId) => {
     companyName: application.job?.company || "",
   }));
 
-  return attachCandidateDetails(enriched);
+  let detailed = await attachCandidateDetails(enriched);
+
+  // ------------------------------------------
+  // Applicant filters (supervisor mod #4)
+  // ------------------------------------------
+
+  const {
+    jobId: filterJobId,
+    status: filterStatus,
+    skills: filterSkills,
+    education: filterEducation,
+    minGrade: filterMinGrade,
+    minExperience: filterMinExperience,
+    minScore: filterMinScore,
+  } = filters;
+
+  if (filterJobId) {
+    detailed = detailed.filter((row) => row.jobId === filterJobId);
+  }
+
+  if (filterStatus) {
+    detailed = detailed.filter((row) => row.status === filterStatus);
+  }
+
+  const wantedSkills = parseSkillsFilter(filterSkills);
+  if (wantedSkills.length > 0) {
+    detailed = detailed.filter((row) => {
+      const keys = rowSkillKeys(row);
+      return wantedSkills.every((wanted) =>
+        keys.some((k) => k.includes(wanted) || wanted.includes(k)),
+      );
+    });
+  }
+
+  if (filterEducation && String(filterEducation).trim()) {
+    const keyword = String(filterEducation).trim().toLowerCase();
+    detailed = detailed.filter((row) =>
+      JSON.stringify(row?.candidate?.education ?? [])
+        .toLowerCase()
+        .includes(keyword),
+    );
+  }
+
+  if (filterMinGrade !== undefined && filterMinGrade !== null && filterMinGrade !== "") {
+    const minGrade = Number(filterMinGrade);
+    if (Number.isFinite(minGrade)) {
+      detailed = detailed.filter((row) => {
+        const best = bestEducationGrade(row?.candidate?.education);
+        return best !== null && best >= minGrade;
+      });
+    }
+  }
+
+  if (
+    filterMinExperience !== undefined &&
+    filterMinExperience !== null &&
+    filterMinExperience !== ""
+  ) {
+    const minExp = Number(filterMinExperience);
+    if (Number.isFinite(minExp) && minExp > 0) {
+      detailed = detailed.filter(
+        (row) =>
+          estimateExperienceYears(row?.candidate?.experience) >= minExp,
+      );
+    }
+  }
+
+  if (
+    filterMinScore !== undefined &&
+    filterMinScore !== null &&
+    filterMinScore !== ""
+  ) {
+    const minScore = Number(filterMinScore);
+    if (Number.isFinite(minScore) && minScore > 0) {
+      detailed = detailed
+        .map((row) => {
+          const { matchScore } = scoreJob(rowToSnapshot(row), {
+            title: row?.job?.title ?? "",
+            description: "",
+            requirements: wantedSkills.join(", "),
+          });
+          return { ...row, matchScore };
+        })
+        .filter((row) => row.matchScore >= minScore);
+    }
+  }
+
+  return detailed;
 };
 
 // ============================================

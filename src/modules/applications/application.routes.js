@@ -11,6 +11,7 @@ import {
 import {
   applyToJobSchema,
   applicationIdSchema,
+  recruiterApplicationsQuerySchema,
   updateApplicationStatusSchema,
 } from "./application.schema.js";
 
@@ -51,6 +52,7 @@ export default async function applicationRoutes(fastify) {
   fastify.get(
     "/recruiter",
     {
+      schema: recruiterApplicationsQuerySchema,
       preHandler: [fastify.authenticate, fastify.authorize(["recruiter"])],
     },
     getRecruiterApplicationsController,

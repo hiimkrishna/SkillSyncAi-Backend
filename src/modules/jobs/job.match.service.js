@@ -101,7 +101,7 @@ const experienceToText = (experience) => {
 //   location      :  8 pts
 // ============================================
 
-const scoreJob = (candidate, job) => {
+export const scoreJob = (candidate, job) => {
   const jobTextLower =
     `${job.title ?? ""} ${job.description ?? ""} ${job.requirements ?? ""}`.toLowerCase();
   const jobTitleLower = String(job.title ?? "").toLowerCase();
@@ -323,6 +323,48 @@ const tryLlmRerank = async (snapshot, openJobs, limit) => {
 };
 
 // ============================================
+// SHARED SNAPSHOT (reused by eligibility checks)
+// ============================================
+
+export const getCandidateSnapshot = async (userId) => {
+  const profile = await findCandidateProfileByUserId(userId);
+
+  const resume = profile
+    ? await findLatestResumeByCandidateId(profile.id)
+    : null;
+
+  const { snapshot, hasUsableData } = buildCandidateSnapshot(profile, resume);
+
+  return { profile, resume, snapshot, hasUsableData };
+};
+
+// ============================================
+// UNIFIED SCORER — SINGLE SOURCE OF TRUTH
+// Every surface (job-match list, AI recommendations, eligibility
+// gate, apply gate) MUST use this. Same candidate + same job =
+// same score, always. Snapshot merges profile + parsed resume.
+// ============================================
+
+export const scoreCandidateForJob = async (userId, job) => {
+  const { profile, snapshot, hasUsableData } =
+    await getCandidateSnapshot(userId);
+
+  const scored = scoreJob(snapshot, job ?? {});
+
+  return {
+    matchScore: scored.matchScore,
+    score: scored.matchScore, // alias for older clients
+    matchedSkills: scored.matchedSkills,
+    missingSkills: scored.missingSkills,
+    reasons: scored.reasons,
+    reason: scored.reasons[0] ?? "", // alias for older clients
+    hasUsableData,
+    profile, // service-internal; consumers pick fields
+    snapshot, // service-internal (profile+resume merge); consumers pick fields
+  };
+};
+
+// ============================================
 // MAIN ENTRY
 // ============================================
 
@@ -355,33 +397,50 @@ export const getMatchedJobsForCandidate = async (userId, limit = MATCH_DEFAULT_L
     throw error;
   }
 
-  // Optional LLM rerank first (uses merged profile + resume).
+  // Deterministic scores FIRST — these are the single source of truth
+  // shown on cards and enforced by the apply gate.
+  const scoredAll = openJobs.map((job) => {
+    const scored = scoreJob(snapshot, job);
+    return {
+      jobId: job.id,
+      job,
+      matchScore: scored.matchScore,
+      score: scored.matchScore, // alias for older clients
+      matchedSkills: scored.matchedSkills,
+      missingSkills: scored.missingSkills,
+      reasons: scored.reasons,
+      reason: scored.reasons[0] ?? "", // alias for older clients
+    };
+  });
+
+  // Optional LLM touch: keep OUR numbers, borrow the LLM's ordering and
+  // reason sentences when available. Numbers never come from the LLM,
+  // so cards and the gate can never disagree.
+  scoredAll.sort((a, b) => b.matchScore - a.matchScore);
   if (useAi) {
     const llmRanked = await tryLlmRerank(snapshot, openJobs, safeLimit);
     if (llmRanked && llmRanked.length > 0) {
-      return llmRanked
+      const detByJob = new Map(scoredAll.map((r) => [String(r.jobId), r]));
+      const order = [];
+      for (const rec of llmRanked) {
+        const det = detByJob.get(String(rec.jobId));
+        if (!det) continue;
+        if (rec.reason) {
+          det.reasons = [rec.reason, ...det.reasons].slice(0, 3);
+          det.reason = det.reasons[0];
+        }
+        order.push(det);
+      }
+      for (const det of scoredAll) {
+        if (!order.includes(det)) order.push(det);
+      }
+      return order
         .filter((r) => r.matchScore >= MATCH_THRESHOLD)
-        .sort((a, b) => b.matchScore - a.matchScore)
         .slice(0, safeLimit);
     }
   }
 
-  // Deterministic fallback — no AI key needed.
-  return openJobs
-    .map((job) => {
-      const scored = scoreJob(snapshot, job);
-      return {
-        jobId: job.id,
-        job,
-        matchScore: scored.matchScore,
-        score: scored.matchScore, // alias for older clients
-        matchedSkills: scored.matchedSkills,
-        missingSkills: scored.missingSkills,
-        reasons: scored.reasons,
-        reason: scored.reasons[0] ?? "", // alias for older clients
-      };
-    })
+  return scoredAll
     .filter((r) => r.matchScore >= MATCH_THRESHOLD)
-    .sort((a, b) => b.matchScore - a.matchScore)
     .slice(0, safeLimit);
 };

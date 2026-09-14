@@ -1,6 +1,7 @@
 import {
   getDashboard,
   getReport,
+  getReportPdf,
 } from "./dashboard.controller.js";
 
 const reportQuerySchema = {
@@ -24,7 +25,20 @@ const reportQuerySchema = {
 };
 
 export default async function dashboardRoutes(app) {
-  // Static route first — before "/"
+  // Static routes first — before "/"
+  app.get(
+    "/report/pdf",
+    {
+      preHandler: [
+        app.authenticate,
+        app.authorize(["candidate", "recruiter"]),
+      ],
+
+      schema: reportQuerySchema,
+    },
+    getReportPdf
+  );
+
   app.get(
     "/report",
     {

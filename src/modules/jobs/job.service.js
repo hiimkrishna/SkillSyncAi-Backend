@@ -2,6 +2,49 @@ import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 
 import { db } from "../../db/index.js";
 import { jobs } from "../../db/schema/jobs.js";
+import { normalizeRequiredSkills } from "./job.eligibility.service.js";
+
+const sanitizeFilters = (data) => {
+  const filters = {};
+
+  if (data.requiredSkills !== undefined) {
+    filters.requiredSkills = normalizeRequiredSkills(data.requiredSkills);
+  }
+
+  if (data.minMatchScore !== undefined) {
+    const score = Number(data.minMatchScore);
+    filters.minMatchScore = Number.isFinite(score)
+      ? Math.max(0, Math.min(100, Math.round(score)))
+      : 0;
+  }
+
+  if (data.minExperienceYears !== undefined) {
+    const years = Number(data.minExperienceYears);
+    filters.minExperienceYears = Number.isFinite(years)
+      ? Math.max(0, Math.min(50, Math.round(years)))
+      : 0;
+  }
+
+  if (data.educationRequirement !== undefined) {
+    const text =
+      typeof data.educationRequirement === "string"
+        ? data.educationRequirement.trim()
+        : "";
+    filters.educationRequirement = text || null;
+  }
+
+  if (data.minEducationGrade !== undefined) {
+    const grade = Number(data.minEducationGrade);
+    filters.minEducationGrade =
+      data.minEducationGrade === null || data.minEducationGrade === ""
+        ? null
+        : Number.isFinite(grade) && grade >= 0
+          ? grade
+          : null;
+  }
+
+  return filters;
+};
 
 // ============================================
 // EDIT WINDOW - 2 days after creation
@@ -233,6 +276,8 @@ export const createJob = async (recruiterId, data) => {
 
       requirements: data.requirements?.trim() || null,
 
+      ...sanitizeFilters(data),
+
       status: data.status ?? "open",
 
       applicationDeadline: deadline,
@@ -324,6 +369,8 @@ export const updateJob = async (jobId, recruiterId, data) => {
   if (data.requirements !== undefined) {
     updateData.requirements = data.requirements?.trim() || null;
   }
+
+  Object.assign(updateData, sanitizeFilters(data));
 
   if (data.status !== undefined) {
     updateData.status = data.status;
