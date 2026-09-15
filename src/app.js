@@ -62,14 +62,28 @@ await app.register(fastifyStatic, {
 const parseOrigins = (value) =>
   String(value ?? "")
     .split(",")
-    .map((s) => s.trim())
+    .map((s) => s.trim().replace(/\/+$/, ""))
     .filter(Boolean);
 
 const prodOrigins = parseOrigins(process.env.FRONTEND_URL);
 const isProduction = process.env.NODE_ENV === "production";
 
+console.log(
+  `[cors] NODE_ENV=${process.env.NODE_ENV} origins=${prodOrigins.length > 0 ? prodOrigins.join(",") : "(open)"}`,
+);
+
 await app.register(cors, {
-  origin: isProduction && prodOrigins.length > 0 ? prodOrigins : true,
+  origin: (origin, cb) => {
+    // Same-origin / curl / Railway health checks have no Origin.
+    if (!origin) return cb(null, true);
+    if (!isProduction || prodOrigins.length === 0) return cb(null, true);
+    const clean = String(origin).replace(/\/+$/, "");
+    // Allow explicit FRONTEND_URL entries plus any Vercel preview deployment.
+    if (prodOrigins.includes(clean) || /\.vercel\.app$/.test(clean)) {
+      return cb(null, true);
+    }
+    return cb(new Error(`CORS blocked for origin ${origin}`), false);
+  },
 
   credentials: true,
 
