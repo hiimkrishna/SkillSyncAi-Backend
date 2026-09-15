@@ -1,3 +1,4 @@
+import "dotenv/config";
 import app from "./app.js";
 import adminRoutes from "./modules/admin/admin.routes.js";
 import { runInterviewReminderSweep } from "./modules/interviews/interview.service.js";
@@ -29,12 +30,15 @@ const runReminderSweepSafe = async () => {
 
 const start = async () => {
   try {
+    // Railway injects PORT dynamically; 0.0.0.0 lets its proxy route in.
+    const port = Number(process.env.PORT) || 5000;
+
     await app.listen({
-      port: 5000,
+      port,
       host: "0.0.0.0",
     });
 
-    console.log("SkillSync API running on http://localhost:5000");
+    console.log(`SkillSync API running on port ${port}`);
 
     setInterval(runReminderSweepSafe, REMINDER_SWEEP_MS);
     setTimeout(runReminderSweepSafe, 30 * 1000);

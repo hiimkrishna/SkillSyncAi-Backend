@@ -54,10 +54,24 @@ await app.register(fastifyStatic, {
 
 // ============================================
 // CORS
+// Production (Railway): locked to FRONTEND_URL (comma-separated for
+// Vercel production + preview domains), credentials on.
+// Development: open for localhost work.
 // ============================================
 
+const parseOrigins = (value) =>
+  String(value ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+const prodOrigins = parseOrigins(process.env.FRONTEND_URL);
+const isProduction = process.env.NODE_ENV === "production";
+
 await app.register(cors, {
-  origin: true,
+  origin: isProduction && prodOrigins.length > 0 ? prodOrigins : true,
+
+  credentials: true,
 
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 
@@ -166,13 +180,21 @@ await app.register(
 
 
 // ============================================
-// HEALTH CHECK
+// HEALTH CHECKS
 // ============================================
 
 app.get("/", async () => {
   return {
     success: true,
     message: "SkillSync API running",
+  };
+});
+
+// Lightweight probe for Railway + frontend availability checks.
+app.get("/health", async () => {
+  return {
+    status: "ok",
+    uptime: process.uptime(),
   };
 });
 

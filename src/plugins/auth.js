@@ -2,6 +2,12 @@ import fp from "fastify-plugin";
 import fastifyJwt from "@fastify/jwt";
 
 const authPlugin = async (fastify) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error(
+      "JWT_SECRET is not set. Set it in Railway → Service → Variables (and in local .env).",
+    );
+  }
+
   await fastify.register(fastifyJwt, {
     secret: process.env.JWT_SECRET,
   });
