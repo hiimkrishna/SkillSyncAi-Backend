@@ -398,6 +398,37 @@ export const getRecruiterWeeklyApplicationCount = async (recruiterId) => {
 };
 
 // ============================================
+// GET RECRUITER PREV-WEEK APPLICATION COUNT
+// (powers the week-over-week trend indicator)
+// ============================================
+
+export const getRecruiterPrevWeeklyApplicationCount = async (recruiterId) => {
+  const fourteenDaysAgo = new Date(
+    Date.now() - 14 * 24 * 60 * 60 * 1000,
+  );
+
+  const sevenDaysAgo = new Date(
+    Date.now() - 7 * 24 * 60 * 60 * 1000,
+  );
+
+  const [result] = await db
+    .select({
+      count: count(),
+    })
+    .from(applications)
+    .innerJoin(jobs, eq(applications.jobId, jobs.id))
+    .where(
+      and(
+        eq(jobs.recruiterId, recruiterId),
+        gte(applications.createdAt, fourteenDaysAgo),
+        lte(applications.createdAt, sevenDaysAgo),
+      ),
+    );
+
+  return Number(result?.count ?? 0);
+};
+
+// ============================================
 // GET RECRUITER HIRED COUNT
 // ============================================
 

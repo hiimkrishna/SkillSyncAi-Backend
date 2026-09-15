@@ -40,6 +40,7 @@ import {
   getRecruiterApplicationsInRange,
   getRecruiterJobsInRange,
   getUpcomingInterviews,
+  getRecruiterPrevWeeklyApplicationCount,
 } from "./dashboard.repository.js";
 
 import { calculateProfileCompletion } from "../../utils/profile-completion.js";
@@ -386,6 +387,8 @@ const getRecruiterDashboardData = async (user) => {
 
     weeklyApplicationCount,
 
+    prevWeeklyApplicationCount,
+
     hiredCount,
   ] = await Promise.all([
     getRecruiterJobCount(user.id),
@@ -407,6 +410,8 @@ const getRecruiterDashboardData = async (user) => {
     getRecruiterRecentJobsWithCounts(user.id),
 
     getRecruiterWeeklyApplicationCount(user.id),
+
+    getRecruiterPrevWeeklyApplicationCount(user.id),
 
     getRecruiterHiredCount(user.id),
   ]);
@@ -532,8 +537,22 @@ const getRecruiterDashboardData = async (user) => {
       ? Math.round((hiredCount / totalApplications) * 1000) / 10
       : 0;
 
+  // Week-over-week trend for the Applications stat card.
+  const weeklyApplicationsTrend =
+    prevWeeklyApplicationCount > 0
+      ? Math.round(
+          ((weeklyApplicationCount - prevWeeklyApplicationCount) /
+            prevWeeklyApplicationCount) *
+            100,
+        )
+      : weeklyApplicationCount > 0
+        ? 100
+        : 0;
+
   const metrics = {
     weeklyApplications: weeklyApplicationCount,
+
+    weeklyApplicationsTrend,
 
     weeklyHires: hiredCount,
 

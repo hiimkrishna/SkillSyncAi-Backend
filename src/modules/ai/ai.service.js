@@ -326,7 +326,13 @@ export const getResumeAnalysis = async (userId, resumeId = null) => {
       .limit(1);
     if (!profile) return null;
     const [r] = await db
-      .select({ aiAnalysis: resumes.aiAnalysis, aiAnalyzedAt: resumes.aiAnalyzedAt })
+      .select({
+        aiAnalysis: resumes.aiAnalysis,
+        aiAnalyzedAt: resumes.aiAnalyzedAt,
+        resumeId: resumes.id,
+        fileName: resumes.fileName,
+        uploadedAt: resumes.createdAt,
+      })
       .from(resumes)
       .where(and(eq(resumes.id, resumeId), eq(resumes.candidateId, profile.id), isNull(resumes.deletedAt)))
       .limit(1);
@@ -334,7 +340,13 @@ export const getResumeAnalysis = async (userId, resumeId = null) => {
   }
   resume = await getResumeForUser(userId);
   if (!resume) return null;
-  return { aiAnalysis: resume.aiAnalysis, aiAnalyzedAt: resume.aiAnalyzedAt, resumeId: resume.id };
+  return {
+    aiAnalysis: resume.aiAnalysis,
+    aiAnalyzedAt: resume.aiAnalyzedAt,
+    resumeId: resume.id,
+    fileName: resume.fileName,
+    uploadedAt: resume.createdAt,
+  };
 };
 
 // ============================================
